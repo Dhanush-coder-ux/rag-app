@@ -5,7 +5,7 @@ from pgvector.sqlalchemy import Vector
 from app.core.database import Base
 from app.core.config import settings
 
-
+#  tMapped this is used for type safety
 class Document(Base):
     __tablename__ = "documents"
 

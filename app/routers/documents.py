@@ -5,7 +5,7 @@ from app.schemas.document import DocumentOut
 from app.services.document_service import ingest_document, list_documents, delete_document
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
-
+# for setting the type of docs
 ALLOWED_TYPES = {"application/pdf", "text/plain"}
 
 
@@ -36,13 +36,11 @@ async def upload_document(
 
 @router.get("/", response_model=list[DocumentOut])
 async def get_documents(db: AsyncSession = Depends(get_db)):
-    """List all uploaded documents."""
     return await list_documents(db)
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_document(document_id: int, db: AsyncSession = Depends(get_db)):
-    """Delete a document and all its chunks (cascade)."""
     deleted = await delete_document(db, document_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Document not found.")

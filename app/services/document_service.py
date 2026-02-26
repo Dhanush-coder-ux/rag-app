@@ -1,10 +1,10 @@
 """
 Core RAG document operations:
-  - ingest: upload → chunk → embed → store
-  - search: embed query → cosine similarity → return top-k chunks
+  ->ingest: upload → chunk → embed → store
+  ->search: embed query → cosine similarity → return top-k chunks
 """
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
+from sqlalchemy import select
 from app.models.document import Document, Chunk
 from app.services.gemini import get_embedding, get_query_embedding
 from app.services.chunker import chunk_text, extract_text_from_pdf
@@ -32,7 +32,6 @@ async def ingest_document(
     await db.flush()  # get doc.id without committing
 
     try:
-        # 2. Extract text
         if content_type == "application/pdf":
             raw_text = extract_text_from_pdf(file_bytes)
         else:

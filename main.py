@@ -7,7 +7,6 @@ from app.routers import documents, query
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Run DB init on startup (creates tables + pgvector extension)."""
     await init_db()
     yield
 
