@@ -1,37 +1,31 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.schemas.document import DocumentOut
+from app.schemas.document import TaskResponse,DocumentOut
 from app.services.document_service import ingest_document, list_documents, delete_document
+from app.core.worker import ingest_document_task
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 # for setting the type of docs
 ALLOWED_TYPES = {"application/pdf", "text/plain"}
 
 
-@router.post("/upload", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
+@router.post("/upload", response_model=TaskResponse)
 async def upload_document(
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
+    file: UploadFile = File(...)
 ):
-    """Upload a PDF or .txt file, chunk it, embed it, and store in NeonDB."""
     if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(
-            status_code=415,
-            detail=f"Unsupported file type: {file.content_type}. Use PDF or plain text.",
-        )
+        raise HTTPException(status_code=415, detail="Unsupported file type")
 
     file_bytes = await file.read()
-    if not file_bytes:
-        raise HTTPException(status_code=400, detail="Empty file.")
 
-    doc = await ingest_document(
-        db=db,
-        filename=file.filename or "untitled",
+    task = ingest_document_task.delay(
+        filename=file.filename,
         file_bytes=file_bytes,
-        content_type=file.content_type,
+        content_type=file.content_type
     )
-    return doc
+
+    return {"task_id": task.id}
 
 
 @router.get("/", response_model=list[DocumentOut])

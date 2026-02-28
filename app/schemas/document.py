@@ -28,3 +28,6 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     sources: list[ChunkOut]
+    
+class TaskResponse(BaseModel):
+    task_id: str

@@ -1,4 +1,5 @@
 from google import genai
+from google.genai import types
 from app.core.config import settings
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
@@ -23,7 +24,7 @@ async def get_query_embedding(text: str) -> list[float]:
         model="gemini-embedding-001",
         contents=text,
         # 👇 Added the exact same config here so the query matches the database!
-        config=genai.types.EmbedContentConfig(
+        config=types.EmbedContentConfig(
             output_dimensionality=768 
         )
     )
@@ -68,10 +69,10 @@ Question: {question}
 
 Answer:
 """
-    # Use generate_content_stream for real-time output
-    async for response in await client.aio.models.generate_content_stream(
-        model="gemini-2.0-flash", # Or your preferred version
+
+    async for response in client.aio.models.generate_content_stream(
+        model="gemini-2.5-flash",
         contents=prompt,
     ):
-        # Each 'response' here is a chunk of the total message
-        yield response.text
+        if response.text:
+            yield response.text
