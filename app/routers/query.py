@@ -1,9 +1,6 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import get_db
-from app.schemas.document import QueryRequest, QueryResponse, ChunkOut
-from app.services.document_service import similarity_search
-from app.services.gemini import generate_answer
+from . import (
+APIRouter,db,QueryRequest,QueryResponse,DocumentService,generate_answer,ChunkOut,create_rag_graph
+)
 
 router = APIRouter(prefix="/query", tags=["Query"])
 
@@ -11,7 +8,7 @@ router = APIRouter(prefix="/query", tags=["Query"])
 @router.post("/", response_model=QueryResponse)
 async def query_documents(
     payload: QueryRequest,
-    db: AsyncSession = Depends(get_db),
+    db:db
 ):
     """
     RAG query endpoint:
@@ -19,7 +16,7 @@ async def query_documents(
       2. Retrieve top-k similar chunks via pgvector cosine search
       3. Send chunks + question to Gemini for grounded answer
     """
-    chunks = await similarity_search(db, payload.question, payload.top_k)
+    chunks = await DocumentService(db).similarity_search(payload.question, payload.top_k)
 
     if not chunks:
         return QueryResponse(
@@ -34,3 +31,15 @@ async def query_documents(
         answer=answer,
         sources=[ChunkOut.model_validate(c) for c in chunks],
     )
+@router.post("/ask")
+async def ask_question( question: str,db:db ):
+    graph = create_rag_graph(db=db)
+    
+    result = await graph.ainvoke({
+        "question":question,
+        "answer":"",
+        "context":[],
+        "steps":[]
+    })
+
+    return result

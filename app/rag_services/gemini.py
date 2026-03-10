@@ -34,7 +34,7 @@ async def get_query_embedding(text: str) -> list[float]:
 
 async def generate_answer(question: str, context_chunks: list[str]) -> str:
     context = "\n\n---\n\n".join(context_chunks)
-
+    print(context)
     prompt = f"""
 You are a helpful assistant. Use ONLY the context below to answer the question.
 If the answer cannot be found in the context, say "I don't have enough information to answer that."

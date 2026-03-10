@@ -1,16 +1,13 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import get_db
-from app.schemas.document import TaskResponse,DocumentOut
-from app.services.document_service import ingest_document, list_documents, delete_document
-from app.core.worker import ingest_document_task
+from . import (
+db,TaskResponse,status,UploadFile,File,HTTPException,ingest_document_task,
+DocumentOut,Document,DocumentService,select,APIRouter
+)
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
-# for setting the type of docs
 ALLOWED_TYPES = {"application/pdf", "text/plain"}
 
 
-@router.post("/upload", response_model=TaskResponse)
+@router.post("/upload", response_model=TaskResponse,status_code=status.HTTP_202_ACCEPTED)
 async def upload_document(
     file: UploadFile = File(...)
 ):
@@ -29,12 +26,21 @@ async def upload_document(
 
 
 @router.get("/", response_model=list[DocumentOut])
-async def get_documents(db: AsyncSession = Depends(get_db)):
-    return await list_documents(db)
+async def get_documents(db: db):
+    return await DocumentService(db).list_documents()
 
+@router.get("/{document_id}", response_model=DocumentOut, status_code=status.HTTP_200_OK)
+async def get_document(document_id: int, db:db):
+    result = await db.execute(
+        select(Document).where(Document.id == document_id)
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    return doc
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_document(document_id: int, db: AsyncSession = Depends(get_db)):
-    deleted = await delete_document(db, document_id)
+async def remove_document(document_id: int, db: db):
+    deleted = await DocumentService(db).delete_document(document_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Document not found.")
