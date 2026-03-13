@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 150
     TOP_K_RESULTS: int = 5
     EMBEDDING_DIM: int = 768 
-
+    TAVILY_API_KEY: str
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
