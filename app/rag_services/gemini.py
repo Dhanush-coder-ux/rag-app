@@ -5,6 +5,7 @@ from app.core.config import settings
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
+
 async def get_embedding(text: str) -> list[float]:
     response = await client.aio.models.embed_content(
         model="gemini-embedding-001",
@@ -52,6 +53,21 @@ Answer:
 
     return response.text
 
+async def rewrite_query(question: str):
+    prompt = f"""
+Rewrite the user query into a clear question.
+
+User query:
+{question}
+
+Rewritten query:
+"""
+    response = await client.aio.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+    )
+
+    return response.text.strip()
 
 async def generate_answer_stream(question: str, context_chunks: list[str]):
     context = "\n\n---\n\n".join(context_chunks)

@@ -8,7 +8,7 @@ from app.core.worker import ingest_document_task
 from sqlalchemy import select
 from typing import Annotated
 # query
-from app.rag_services.langgraph_service import create_rag_graph
+from app.langraph_pipeline.langgraph_service import LangGraphServices
 from app.rag_services.gemini import generate_answer
 from app.schemas.document import QueryRequest, QueryResponse, ChunkOut
 db = Annotated[AsyncSession,Depends(get_db)]
