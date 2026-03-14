@@ -13,7 +13,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="RAG Backend API",
-    description="Retrieval-Augmented Generation using FastAPI + SQLAlchemy + pgvector (NeonDB) + Gemini",
+    description="Retrieval-Augmented Generation + LangGraph using FastAPI + SQLAlchemy + pgvector (NeonDB) + Gemini",
     version="1.0.0",
     lifespan=lifespan
 )

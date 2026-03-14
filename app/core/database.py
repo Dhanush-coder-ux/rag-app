@@ -11,7 +11,7 @@ engine = create_async_engine(
     pool_size=5,
     max_overflow=10,
 )
-# if DB connection sleeps pool_pre_ping will auto-reconnect, 
+
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,
