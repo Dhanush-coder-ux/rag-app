@@ -12,5 +12,8 @@ class Settings(BaseSettings):
     EMBEDDING_DIM: int = 768 
     TAVILY_API_KEY: str
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    RERANKER_TOP_K: int = 5
+    RETRIEVER_TOP_K: int = 10
+    TAVILY_TIMEOUT_SECONDS: int = 10
 
 settings = Settings()

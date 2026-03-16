@@ -31,3 +31,8 @@ class QueryResponse(BaseModel):
     
 class TaskResponse(BaseModel):
     task_id: str
+
+
+class AskRequest(BaseModel):
+    question: str
+    session_id: str

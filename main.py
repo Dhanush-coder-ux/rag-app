@@ -2,8 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import init_db
-from app.routers import documents, query
-
+from app.routers import documents, query,rag
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,6 +27,7 @@ app.add_middleware(
 
 app.include_router(documents.router)
 app.include_router(query.router)
+app.include_router(rag.router)
 
 
 @app.get("/health", tags=["Health"])
