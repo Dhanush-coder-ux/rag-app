@@ -30,6 +30,6 @@ async def ask_stream(body: QuestionRequest, db: AsyncSession = Depends(get_db)):
         media_type="text/event-stream",
             headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",   
+            "X-Accel-Buffering": "no",   # disables Nginx response buffering
         },
     )
