@@ -1,47 +1,32 @@
 import asyncio
 import logging
 from typing import List,AsyncGenerator
-
 from sqlalchemy.ext.asyncio import AsyncSession
-from tavily import TavilyClient
-
+from app.web_search_tool.web_search_tool import WebSearchTool
 from app.core.config import settings
 from app.rag_services.document_service import DocumentService
 from app.rag_services.gemini import generate_answer,generate_answer_stream
 from app.RagPipeline.state import AgentState,ToolName
 logger = logging.getLogger(__name__)
 
-VALID_TOOLS: set[ToolName] = {"retrieve_docs", "tavily_search"}
-_tavily = TavilyClient(api_key=settings.TAVILY_API_KEY)
+VALID_TOOLS: set[ToolName] = {"retrieve_docs", "web_search"}
+
+_web_search = WebSearchTool(max_results=5)
 
 
 class RagNodes:
-    """
-    Stateless node implementations.
-    All I/O is through AgentState — no side effects on self.
-    The db session is injected at construction and passed only
-    to DocumentService; it is never stored on node instances
-    so the class stays safe for concurrent use.
-    """
 
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession) :
         self._db = db
 
-    # ------------------------------------------------------------------ #
-    # Router                                                               #
-    # ------------------------------------------------------------------ #
-
     async def router_node(self, state: AgentState) -> dict:
-        """
-        Asks the LLM which tool to use and validates the output.
-        Falls back to 'none' after MAX_RETRIES failed attempts.
-        """
+     
         MAX_RETRIES = 2
         prompt = (
             "You are a routing assistant. Respond with EXACTLY one of these "
             "two strings and nothing else:\n"
             "  retrieve_docs   — for questions about internal documents\n"
-            "  tavily_search   — for questions requiring live internet data\n\n"
+            "  web_search   — for questions requiring live internet data\n\n"
             f"Question: {state['question']}"
         )
 
@@ -61,10 +46,6 @@ class RagNodes:
             "steps": state.get("steps", []) + ["router"],
         }
 
-    # ------------------------------------------------------------------ #
-    # Tool nodes                                                           #
-    # ------------------------------------------------------------------ #
-
     async def retriever_node(self, state: AgentState) -> dict:
         try:
             service = DocumentService(db=self._db)
@@ -82,26 +63,31 @@ class RagNodes:
 
     async def web_search_node(self, state: AgentState) -> dict:
         try:
-            response = await asyncio.wait_for(
-                asyncio.to_thread(_tavily.search, query=state["question"]),
-                timeout=settings.TAVILY_TIMEOUT_SECONDS,
+            response = await asyncio.to_thread(
+                _web_search.search,
+                state["question"]
             )
-            context = self._deduplicate([r["content"] for r in response["results"]])
-        except asyncio.TimeoutError:
-            logger.error("Tavily search timed out")
-            context = []
+
+            context = self._deduplicate([
+                f"Title: {r.get('title')}\nURL: {r.get('url')}\nContent: {r.get('content')}"
+                for r in response.get("results", [])
+                if r.get("content")
+            ])
+
         except Exception as exc:
-            logger.error("Tavily search failed: %s", exc)
+            logger.error("Custom web search failed: %s", exc)
             context = []
 
         return {
             "context": context,
+            "sources": [r.get("url") for r in response["results"]],
             "steps": state.get("steps", []) + ["web_search"],
             "error": None if context else "web search returned no results",
         }
 
+    
     async def error_node(self, state: AgentState) -> dict:
-        """Reached when router returns 'none' or both tools fail."""
+  
         logger.warning("Entering error fallback for question: %s", state["question"])
         return {
             "context": [],
@@ -109,20 +95,10 @@ class RagNodes:
             "error": state.get("error") or "routing failed: unknown tool",
         }
 
-    # ------------------------------------------------------------------ #
-    # Reranker                                                             #
-    # ------------------------------------------------------------------ #
 
     async def reranker_node(self, state: AgentState) -> dict:
-        """
-        Lightweight cross-encoder-free reranking:
-        deduplicate, truncate to TOP_K, prefer longer chunks
-        (length is a cheap proxy for information density).
-
-        Replace the sort key with a real cross-encoder score
-        when latency budget allows.
-        """
-        TOP_K = settings.RERANKER_TOP_K  # e.g. 5
+ 
+        TOP_K = settings.RERANKER_TOP_K 
 
         ranked = sorted(
             state.get("context", []),
@@ -135,9 +111,6 @@ class RagNodes:
             "steps": state.get("steps", []) + ["reranker"],
         }
 
-    # ------------------------------------------------------------------ #
-    # Generator                                                            #
-    # ------------------------------------------------------------------ #
 
     async def generator_node(self, state: AgentState) -> dict:
         if not state.get("context"):
@@ -156,11 +129,7 @@ class RagNodes:
     async def generator_node_stream(
         self, state: AgentState
     ) -> AsyncGenerator[str, None]:
-        """
-        Used by the /stream endpoint.
-        Runs the full graph up to the generator node normally,
-        then streams the final answer token by token.
-        """
+    
         if not state.get("context"):
             yield "I could not find relevant information to answer your question."
             return
@@ -168,16 +137,12 @@ class RagNodes:
         async for chunk in generate_answer_stream(state["question"], state["context"]):
             yield chunk
 
-    # ------------------------------------------------------------------ #
-    # Helpers                                                              #
-    # ------------------------------------------------------------------ #
-
     @staticmethod
     def _deduplicate(items: List[str]) -> List[str]:
         seen: set[str] = set()
         out: List[str] = []
         for item in items:
-            key = item[:200]  # normalise on leading 200 chars
+            key = item[:200]
             if key not in seen:
                 seen.add(key)
                 out.append(item)

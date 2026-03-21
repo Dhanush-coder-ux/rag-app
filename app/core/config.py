@@ -10,10 +10,8 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 150
     TOP_K_RESULTS: int = 5
     EMBEDDING_DIM: int = 768 
-    TAVILY_API_KEY: str
     RERANKER_TOP_K: int = 5
     RETRIEVER_TOP_K: int = 10
-    TAVILY_TIMEOUT_SECONDS: int = 10
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
   
 
