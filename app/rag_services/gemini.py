@@ -35,16 +35,16 @@ async def generate_answer(question: str, context_chunks: list[str]) -> str:
     context = "\n\n---\n\n".join(context_chunks)
     print(context)
     prompt = f"""
-You are a helpful assistant. Use ONLY the context below to answer the question.
-If the answer cannot be found in the context, say "I don't have enough information to answer that."
+        You are a helpful assistant. Use ONLY the context below to answer the question.
+        If the answer cannot be found in the context, say "I don't have enough information to answer that."
 
-Context:
-{context}
+        Context:
+        {context}
 
-Question: {question}
+        Question: {question}
 
-Answer:
-"""
+        Answer:
+        """
 
     response = await client.aio.models.generate_content(
         model="gemini-2.5-flash", 
@@ -55,13 +55,13 @@ Answer:
 
 async def rewrite_query(question: str):
     prompt = f"""
-Rewrite the user query into a clear question.
+    Rewrite the user query into a clear question.
 
-User query:
-{question}
+    User query:
+    {question}
 
-Rewritten query:
-"""
+    Rewritten query:
+    """
     response = await client.aio.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,

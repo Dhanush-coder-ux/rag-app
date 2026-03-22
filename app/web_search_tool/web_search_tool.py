@@ -402,9 +402,9 @@ class WebSearchTool:
 # ---------------------------------------------------------------------------
 # Quick smoke-test / example usage
 # ---------------------------------------------------------------------------
-if __name__ == "__main__":
-    from pprint import pprint
+# if __name__ == "__main__":
+#     from pprint import pprint
 
-    tool = WebSearchTool(max_results=3)
-    result = tool.search("who is the president of america")
-    pprint(result, width=120)
+#     tool = WebSearchTool(max_results=3)
+#     result = tool.search("who is the president of america")
+#     pprint(result, width=120)
