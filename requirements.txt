@@ -19,3 +19,4 @@ langgraph
 trafilatura
 bs4
 ddgs
+fastapi[standard]

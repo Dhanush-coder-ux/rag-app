@@ -12,6 +12,7 @@ from app.rag_services.gemini import generate_answer_stream
 class LangGraphService:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
+        self.graph = build_rag_graph(db)
 
     def _make_initial_state(self, question: str) -> AgentState:
         return {
@@ -25,39 +26,65 @@ class LangGraphService:
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    async def run(self, question: str) -> AgentState:
-        """Non-streaming: run the full graph and return the final state."""
-        graph = build_rag_graph(self._db)
-        return await graph.ainvoke(self._make_initial_state(question))
+    async def run(self, question: str):
+        initial = self._make_initial_state(question)
+        initial["history"] = []
+
+        result = await self.graph.ainvoke(initial)
+
+        # 🔥 preserve metadata (VERY IMPORTANT)
+        result["trace_id"] = initial["trace_id"]
+        result["created_at"] = initial["created_at"]
+
+        return result
 
     async def stream(self, question: str) -> AsyncGenerator[str, None]:
 
-        graph = build_rag_graph(self._db)
         initial = self._make_initial_state(question)
+        initial["history"] = []
 
-        final_state: AgentState = initial
+        final_state = initial
+        last_step = None
 
-        async for state_snapshot in graph.astream(
-            initial,
-            stream_mode="values",  
-        ):
-            final_state = state_snapshot
-       
-            if "reranker" in (state_snapshot.get("steps") or []):
-                break
+        # 🔥 send trace id
+        yield f"event: trace\ndata: {initial['trace_id']}\n\n"
 
-        context = final_state.get("context", [])
+        try:
+            async for state_snapshot in self.graph.astream(
+                initial,
+                stream_mode="values",
+            ):
+                final_state = state_snapshot
 
-        if not context:
-            yield "data: I could not find relevant information to answer your question.\n\n"
-            yield "data: [DONE]\n\n"
-            return
+                steps = state_snapshot.get("steps") or []
+                step = steps[-1] if steps else None
 
-        async for chunk in generate_answer_stream(
-            final_state["question"], context
-        ):
-            if chunk:
-                safe_chunk = chunk.replace("\n", "\\n")
-                yield f"data: {safe_chunk}\n\n"
+                if step and step != last_step:
+                    yield f"event: step\ndata: {step}\n\n"
+                    last_step = step
+
+                if "reranker" in steps:
+                    break
+
+            context = final_state.get("context", [])
+
+            if not context:
+                yield "data: No relevant info found\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
+            sources = final_state.get("sources", [])
+            if sources:
+                yield f"event: sources\ndata: {sources}\n\n"
+
+            query = final_state.get("rewritten_question", final_state["question"])
+
+            async for chunk in generate_answer_stream(query, context):
+                if chunk:
+                    import json
+                    yield f"data: {json.dumps(chunk)}\n\n"
+
+        except Exception as e:
+            yield f"data: Error: {str(e)}\n\n"
 
         yield "data: [DONE]\n\n"

@@ -15,12 +15,13 @@ async def ask(body: QuestionRequest, db:db):
     svc = LangGraphService(db=db)
     state = await svc.run(body.question)
     return RagResponse(
-        answer=state["answer"],
-        steps=state["steps"],
-        tool_used=state["tool"],
-        trace_id=state["trace_id"],
-        error=state.get("error"),
-    )
+    answer=state.get("answer", ""),
+    steps=state.get("steps", []),
+    tool_used=state.get("tool", "none"),
+    trace_id=state.get("trace_id"),
+    error=state.get("error"),
+    sources=state.get("sources", []),  
+)
 
 
 @router.post("/stream")
