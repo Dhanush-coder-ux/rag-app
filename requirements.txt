@@ -14,7 +14,6 @@ google-genai==0.3.0
 celery
 redis
 tavily-python
-# langchain_google_genai
 langgraph
 trafilatura
 bs4
