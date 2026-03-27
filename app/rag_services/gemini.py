@@ -87,3 +87,21 @@ async def generate_answer_stream(question: str, context_chunks: list[str]):
     ):
         if response.text:
             yield response.text
+
+
+async def generate_chat_title(message: str) -> str:
+    prompt = f"""
+    Generate a short 3-5 word title for this chat.
+
+    Message:
+    {message}
+
+    Only return the title.
+    """
+
+    response = await client.aio.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+    )
+
+    return response.text.strip().replace("\n", "")

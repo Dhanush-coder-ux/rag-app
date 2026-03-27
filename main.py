@@ -1,8 +1,12 @@
+from app.models import chat_session
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import init_db
 from app.routers import documents, rag
+from app.routers import chat_session
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -27,6 +31,7 @@ app.add_middleware(
 
 app.include_router(documents.router)
 app.include_router(rag.router)
+app.include_router(chat_session.router)
 
 
 @app.get("/health", tags=["Health"])
