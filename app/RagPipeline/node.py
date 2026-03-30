@@ -26,11 +26,9 @@ _helper     = RagPipeLineHelper()
 
 INTERNAL_SOURCE_TAG = "[Source: YOUR-DOCUMENT]"
 
-# ── Hybrid weight: doc chunks are duplicated so they outrank web results ───────
 HYBRID_DOC_WEIGHT = 2   # internal doc chunks count twice in merged context
 
 
-# ── Shared utility ─────────────────────────────────────────────────────────────
 
 def _build_history_block(history: list, max_messages: int = 6) -> str:
     if not history:
@@ -42,7 +40,6 @@ def _build_history_block(history: list, max_messages: int = 6) -> str:
     return "Recent conversation:\n" + "\n".join(turns) + "\n\n"
 
 
-# ── Step labels per mode ────────────────────────────────────────────────────────
 
 def _steps_for_mode(mode: RagMode) -> dict[str, str]:
     """Return canonical step labels keyed by pipeline phase."""
@@ -60,7 +57,6 @@ def _steps_for_mode(mode: RagMode) -> dict[str, str]:
             "generate":  "🧠 Generating answer...",
             "reflect":   "✅ Reviewing answer...",
         }
-    # hybrid / default
     return {
         "retrieve_doc": "📄 Searching documents...",
         "retrieve_web": "🌐 Searching web...",
@@ -75,7 +71,6 @@ class RagNodes:
     def __init__(self, db: AsyncSession):
         self._db = db
 
-    # ── 1. Query Rewrite ────────────────────────────────────────────────────
 
     async def query_rewrite(self, state: AgentState) -> dict:
         original     = state["question"].strip()
@@ -119,7 +114,6 @@ class RagNodes:
             "steps": _helper._safe_steps(state, "query_rewrite"),
         }
 
-    # ── 2. Router (LLM fallback — only used when mode is not set) ──────────
 
     async def router_node(self, state: AgentState) -> dict:
         q             = state.get("rewritten_question") or state["question"]
@@ -158,7 +152,6 @@ class RagNodes:
         logger.info("router_node → tool=%r for question=%r", tool, q)
         return {"tool": tool, "steps": _helper._safe_steps(state, "router")}
 
-    # ── 3. Retriever (documents mode) ───────────────────────────────────────
 
     async def retriever_node(self, state: AgentState) -> dict:
         query = state.get("rewritten_question") or state["question"]
@@ -200,7 +193,6 @@ class RagNodes:
             "error":     None,
         }
 
-    # ── 4. Web Search (web mode) ────────────────────────────────────────────
 
     async def web_search(self, state: AgentState) -> dict:
         query = state.get("rewritten_question") or state["question"]
@@ -241,7 +233,6 @@ class RagNodes:
             "error":     None if context else "web_search_empty",
         }
 
-    # ── 5. Both / Hybrid ────────────────────────────────────────────────────
 
     async def both(self, state: AgentState) -> dict:
         labels = _steps_for_mode("hybrid")
@@ -267,8 +258,6 @@ class RagNodes:
             web_context = web_result.get("context", [])
             sources     = web_result.get("sources", [])
 
-        # ── Intelligent merge: doc chunks weighted higher ────────────────
-        # Duplicate doc chunks (HYBRID_DOC_WEIGHT × 2) so they win reranking
         weighted_doc = doc_context * HYBRID_DOC_WEIGHT
         merged       = _helper._deduplicate(weighted_doc + web_context)
 
@@ -285,7 +274,6 @@ class RagNodes:
             "error":     None if merged else "both_empty",
         }
 
-    # ── 6. Reranker ─────────────────────────────────────────────────────────
 
     async def reranker_node(self, state: AgentState) -> dict:
         query        = (state.get("rewritten_question") or state["question"]).lower()
@@ -313,7 +301,6 @@ class RagNodes:
             "steps":   _helper._safe_steps(state, label),
         }
 
-    # ── 7. Generator ────────────────────────────────────────────────────────
 
     async def generator_node(self, state: AgentState) -> dict:
         context  = state.get("context", [])
@@ -322,7 +309,6 @@ class RagNodes:
         mode     = state.get("mode", "hybrid")
         label    = _steps_for_mode(mode).get("generate", "🧠 Generating answer...")
 
-        # Fallback to memory if context is empty
         if not context and history:
             context = [
                 f"[Source: MEMORY]\n{m['content']}"
@@ -367,7 +353,6 @@ class RagNodes:
             logger.error("generator_node LLM error: %s", exc)
             answer = "An error occurred while generating the answer. Please try again."
 
-        # ── Simple confidence heuristic ─────────────────────────────────
         confidence = self._compute_confidence(context, answer)
 
         return {
@@ -376,7 +361,6 @@ class RagNodes:
             "steps":      _helper._safe_steps(state, label),
         }
 
-    # ── 8. Reflection ────────────────────────────────────────────────────────
 
     async def reflection(self, state: AgentState) -> dict:
         answer        = state.get("answer", "")
@@ -416,7 +400,6 @@ class RagNodes:
             "steps":  _helper._safe_steps(state, label),
         }
 
-    # ── 9. Error ──────────────────────────────────────────────────────────────
 
     async def error_node(self, state: AgentState) -> dict:
         logger.warning(
@@ -430,7 +413,6 @@ class RagNodes:
             "error":   state.get("error") or "unknown_error",
         }
 
-    # ── Private helpers ────────────────────────────────────────────────────────
 
     async def _retriever_raw(self, state: AgentState) -> dict:
         """Used by `both` node."""
@@ -474,7 +456,6 @@ class RagNodes:
             return 0.1
         if not answer or len(answer) < 20:
             return 0.3
-        # How many context chunks contain tokens from the answer?
         answer_tokens = set(re.findall(r'\w+', answer.lower()))
         grounded = sum(
             1 for c in context

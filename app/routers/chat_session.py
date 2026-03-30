@@ -1,8 +1,8 @@
 # app/api/chat_router.py
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession          # ← fixed import
-from app.rag_services.chat_service import ChatServices   # ← fixed filename
+from sqlalchemy.ext.asyncio import AsyncSession          
+from app.rag_services.chat_service import ChatServices   
 from app.core.database import get_db
 
 router = APIRouter(prefix="/chat", tags=["chat"])

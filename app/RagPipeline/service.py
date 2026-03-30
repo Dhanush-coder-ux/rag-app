@@ -17,16 +17,11 @@ from app.schemas.rag import SourceItem
 logger = logging.getLogger(__name__)
 
 
-# ── Source enrichment ──────────────────────────────────────────────────────────
 
 def _enrich_sources(raw_sources: List[str], context: List[str]) -> List[SourceItem]:
-    """
-    Convert raw URL strings + context snippets into rich SourceItem objects.
-    Document sources are extracted from context chunks tagged [Source: YOUR-DOCUMENT].
-    """
+
     items: List[SourceItem] = []
 
-    # Web sources (from sources list)
     for url in raw_sources:
         snippet = _find_snippet_for_url(url, context)
         items.append(SourceItem(
@@ -36,7 +31,6 @@ def _enrich_sources(raw_sources: List[str], context: List[str]) -> List[SourceIt
             source_type="web",
         ))
 
-    # Document sources (from internal context chunks)
     for chunk in context:
         if chunk.startswith("[Source: YOUR-DOCUMENT]"):
             text = chunk.replace("[Source: YOUR-DOCUMENT]", "").strip()
@@ -47,7 +41,6 @@ def _enrich_sources(raw_sources: List[str], context: List[str]) -> List[SourceIt
                 source_type="document",
             ))
 
-    # Deduplicate by url+title
     seen = set()
     unique = []
     for item in items:
@@ -67,7 +60,6 @@ def _find_snippet_for_url(url: str, context: List[str]) -> str | None:
 
 
 def _url_to_title(url: str) -> str:
-    """Best-effort human-readable title from a URL."""
     try:
         from urllib.parse import urlparse
         parsed = urlparse(url)
@@ -78,20 +70,16 @@ def _url_to_title(url: str) -> str:
         return url
 
 
-# ── Service ────────────────────────────────────────────────────────────────────
+
 
 class LangGraphService:
     def __init__(self, db: AsyncSession) -> None:
         self._db   = db
         self.graph = build_rag_graph(db)
-
-    # ── State factory ──────────────────────────────────────────────────────
-
     def _make_initial_state(self, question: str, mode: RagMode = "hybrid") -> AgentState:
         return {
             "question":   question,
-            "mode":       mode,              # ← injected here
-            "context":    [],
+            "mode":       mode,             
             "answer":     "",
             "steps":      [],
             "tool":       "none",
@@ -102,7 +90,7 @@ class LangGraphService:
             "confidence": None,
         }
 
-    # ── Non-streaming run ──────────────────────────────────────────────────
+
 
     async def run(
         self,
@@ -118,20 +106,15 @@ class LangGraphService:
             initial["trace_id"], mode, question,
         )
 
-        result             = await self.graph.ainvoke(initial)
+        result  = await self.graph.ainvoke(initial)
         result["trace_id"] = initial["trace_id"]
         result["created_at"] = initial["created_at"]
-
-        # ── Enrich sources ─────────────────────────────────────────────
         result["sources"] = _enrich_sources(
             result.get("sources", []),
             result.get("context", []),
         )
-
-        # ── tool_used → schema-compatible string ───────────────────────
         result["tool_used"] = _resolve_tool_used(mode, result.get("tool_used"))
 
-        # ── Append turn to history ─────────────────────────────────────
         result["history"] = list(initial["history"]) + [
             {"role": "user",      "content": question},
             {"role": "assistant", "content": result.get("answer", "")},
@@ -139,7 +122,7 @@ class LangGraphService:
 
         return result
 
-    # ── Streaming run ──────────────────────────────────────────────────────
+
 
     async def stream(
         self,
@@ -156,7 +139,6 @@ class LangGraphService:
             initial["trace_id"], mode, question,
         )
 
-        # Emit trace id immediately
         yield f"event: trace\ndata: {initial['trace_id']}\n\n"
         yield f"event: mode\ndata: {mode}\n\n"
 
@@ -174,7 +156,6 @@ class LangGraphService:
                     yield f"event: step\ndata: {json.dumps(step)}\n\n"
                     last_step = step
 
-                # Stop graph streaming once reranker has run; stream tokens next
                 if "reranker" in (snapshot.get("steps") or []):
                     break
 
@@ -185,7 +166,6 @@ class LangGraphService:
                 yield "data: [DONE]\n\n"
                 return
 
-            # Emit enriched sources
             rich_sources = _enrich_sources(
                 final_state.get("sources", []),
                 context,
@@ -196,11 +176,9 @@ class LangGraphService:
                     f"data: {json.dumps([s.model_dump() for s in rich_sources])}\n\n"
                 )
 
-            # Emit tool_used
             tool_used = _resolve_tool_used(mode, final_state.get("tool_used"))
             yield f"event: tool_used\ndata: {tool_used}\n\n"
 
-            # Emit the final step label before token stream
             generate_label = {
                 "documents": "🧠 Generating answer...",
                 "web":       "🧠 Generating answer...",
@@ -208,7 +186,6 @@ class LangGraphService:
             }.get(mode, "🧠 Generating answer...")
             yield f"event: step\ndata: {json.dumps(generate_label)}\n\n"
 
-            # Stream answer tokens
             query = final_state.get("rewritten_question", final_state["question"])
             async for chunk in generate_answer_stream(query, context):
                 if chunk:
@@ -221,7 +198,6 @@ class LangGraphService:
         yield "data: [DONE]\n\n"
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _resolve_tool_used(
     mode: RagMode,

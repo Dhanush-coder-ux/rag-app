@@ -1,5 +1,3 @@
-# app/rag_services/chat_service.py  ← fixed typo
-
 from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -14,16 +12,12 @@ class _Chat:
 
 class ChatServices(_Chat):
 
-    # ── Title helpers ──────────────────────────────────────────────────────
-
     async def generate_title(self, message: str) -> str:
         try:
             title = await generate_chat_title(message)
             return title.strip().replace("\n", "")[:60]   
         except Exception:
             return message[:30]
-
-    # ── FIXED: method is now properly indented inside the class ───────────
 
     async def update_title_if_needed(self, session_id: int, message: str) -> None:
         result = await self.db.execute(
@@ -44,7 +38,6 @@ class ChatServices(_Chat):
                 await self.db.rollback()
                 raise exc
 
-    # ── CRUD ───────────────────────────────────────────────────────────────
 
     async def create_chat_session(self) -> ChatSession:
         try:
