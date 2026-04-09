@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     EMBEDDING_DIM: int = 768 
     RERANKER_TOP_K: int = 5
     RETRIEVER_TOP_K: int = 10
+    MAX_MESSAGES_PER_SESSION:int = 15  
+    GZIP_LEVEL :int= 6                  
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
   
 

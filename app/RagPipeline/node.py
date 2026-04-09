@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.rag_services.document_service import DocumentService
 from app.rag_services.gemini import generate_answer
 from app.RagPipeline.state import AgentState, RagMode, ToolName
-from app.helper.rag_pipeline import RagPipeLineHelper
+from app.utils.rag_pipeline import RagPipeLineHelper
 
 logger = logging.getLogger(__name__)
 
