@@ -21,4 +21,5 @@ bs4
 ddgs
 fastapi[standard]
 pdfplumber
+gunicorn ; platform_system !="windows"
 pytesseract==0.3.10
