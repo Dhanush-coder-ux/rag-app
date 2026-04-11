@@ -1,4 +1,3 @@
-# app/models/chat_session.py
 from __future__ import annotations
 from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, LargeBinary, String, Text
@@ -21,7 +20,7 @@ class ChatSession(Base):
         "ChatMessage",
         back_populates="session",
         cascade="all, delete-orphan",
-        lazy="noload",   # never auto-load — LargeBinary bytes must never reach the serializer
+        lazy="noload",  
     )
 
 
@@ -33,7 +32,7 @@ class ChatMessage(Base):
         Integer, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     role:        Mapped[str]      = mapped_column(String(16))
-    content:     Mapped[bytes]    = mapped_column(LargeBinary)   # gzip-compressed
+    content:     Mapped[bytes]    = mapped_column(LargeBinary)   
     token_count: Mapped[int|None] = mapped_column(Integer, nullable=True, default=None)
     created_at:  Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

@@ -20,4 +20,5 @@ trafilatura
 bs4
 ddgs
 fastapi[standard]
-
+pdfplumber
+pytesseract==0.3.10

@@ -28,18 +28,12 @@ from bs4 import BeautifulSoup
 from ddgs import DDGS
 from ddgs.exceptions import DDGSException
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
 )
 logger = logging.getLogger("WebSearchTool")
 
-# ---------------------------------------------------------------------------
-# Constants / sensible defaults
-# ---------------------------------------------------------------------------
 DEFAULT_MAX_RESULTS: int = 5
 DEFAULT_TIMEOUT: int = 10          # seconds per HTTP request
 DEFAULT_MAX_CONTENT_CHARS: int = 3_000   # ~750 tokens — safe for most LLMs
@@ -47,7 +41,6 @@ DEFAULT_MAX_IMAGES_PER_PAGE: int = 5
 DEFAULT_MAX_RELATED_IMAGES: int = 5
 REQUEST_DELAY_SECONDS: float = 1.0  # politeness delay between page fetches
 
-# Image src patterns that indicate non-content assets
 _SKIP_IMAGE_PATTERNS: tuple[str, ...] = (
     "logo", "icon", "avatar", "favicon",
     "sprite", "ads", "banner", "tracking",
@@ -55,9 +48,6 @@ _SKIP_IMAGE_PATTERNS: tuple[str, ...] = (
 )
 
 
-# ---------------------------------------------------------------------------
-# WebSearchTool
-# ---------------------------------------------------------------------------
 class WebSearchTool:
     """
     Tavily-style web search tool for AI agents.
@@ -101,13 +91,9 @@ class WebSearchTool:
         self.request_delay = request_delay
         self.headers = {"User-Agent": user_agent}
 
-        # Reusable requests Session — connection pooling + shared headers
         self._session = requests.Session()
         self._session.headers.update(self.headers)
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
     def search(self, query: str) -> dict:
         """
@@ -152,7 +138,6 @@ class WebSearchTool:
         for item in raw_results:
             url: str = item.get("href", "").strip()
 
-            # Skip malformed or already-processed URLs
             if not url or not self._is_valid_url(url):
                 logger.debug("Skipping invalid URL: %r", url)
                 continue
@@ -175,7 +160,6 @@ class WebSearchTool:
                 }
             )
 
-            # Polite delay between page fetches to avoid rate-limiting
             time.sleep(self.request_delay)
 
             if len(results) >= self.max_results:
@@ -210,7 +194,6 @@ class WebSearchTool:
         if not html:
             return ""
 
-        # --- Primary: trafilatura ---
         text = trafilatura.extract(
             html,
             include_comments=False,
@@ -220,12 +203,10 @@ class WebSearchTool:
         if text:
             return self._clean_text(text)[: self.max_content_chars]
 
-        # --- Fallback: BeautifulSoup paragraph extraction ---
         logger.debug("trafilatura returned nothing for %s — using BS4 fallback", url)
         try:
             soup = BeautifulSoup(html, "html.parser")
 
-            # Remove boilerplate tags before extracting text
             for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
                 tag.decompose()
 
@@ -259,27 +240,21 @@ class WebSearchTool:
             soup = BeautifulSoup(html, "html.parser")
 
             for img_tag in soup.find_all("img"):
-                # Prefer src, fall back to lazy-load data-src
                 src: Optional[str] = img_tag.get("src") or img_tag.get("data-src")
                 if not src:
                     continue
 
-                # Resolve relative paths → absolute URL
                 full_url = urljoin(url, src.strip())
 
-                # Skip non-HTTP resources (data URIs, mailto, etc.)
                 if not full_url.startswith(("http://", "https://")):
                     continue
 
-                # Skip SVG (usually icons/illustrations, not content photos)
                 if full_url.lower().endswith(".svg"):
                     continue
 
-                # Skip known non-content image patterns
                 if any(pat in full_url.lower() for pat in _SKIP_IMAGE_PATTERNS):
                     continue
 
-                # Optional: skip suspiciously tiny images (likely tracking pixels)
                 width = img_tag.get("width")
                 height = img_tag.get("height")
                 if width and height:
@@ -323,9 +298,6 @@ class WebSearchTool:
 
         return images
 
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
 
     def _ddg_text_search(self, query: str) -> list[dict]:
         """
@@ -336,8 +308,6 @@ class WebSearchTool:
         """
         try:
             with DDGS() as ddgs:
-                # Fetch a small buffer beyond max_results to account for
-                # duplicates / invalid URLs that get filtered downstream.
                 buffer = max(self.max_results * 2, self.max_results + 5)
                 return list(ddgs.text(query, max_results=buffer))
 
@@ -392,19 +362,8 @@ class WebSearchTool:
         - Strips leading/trailing whitespace.
         """
         import re
-        # Collapse horizontal whitespace
         text = re.sub(r"[ \t]+", " ", text)
-        # Collapse excessive blank lines
         text = re.sub(r"\n{3,}", "\n\n", text)
         return text.strip()
 
 
-# ---------------------------------------------------------------------------
-# Quick smoke-test / example usage
-# ---------------------------------------------------------------------------
-# if __name__ == "__main__":
-#     from pprint import pprint
-
-#     tool = WebSearchTool(max_results=3)
-#     result = tool.search("who is the president of america")
-#     pprint(result, width=120)
