@@ -10,7 +10,7 @@ class ChatServices:
 
     @staticmethod
     def _decompress(data: bytes) -> str:
-        """Decompress gzip bytes and decode to str."""
+        """Decompress gzip bytes and decode to str"""
         return gzip.decompress(data).decode("utf-8")
 
     @staticmethod
