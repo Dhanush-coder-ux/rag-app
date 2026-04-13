@@ -1,3 +1,11 @@
+
+import sys
+
+
+if sys.platform !=  "win32" :
+    import uvloop
+    import asyncio
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 from app.models import chat_session
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -5,9 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import init_db
 from app.routers import documents, rag
 from app.routers import chat_session
-import sys
-
-
+        
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
@@ -21,11 +27,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-if sys.platform !=  "win32" :
-    import uvloop
-    import asyncio
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-        
 
 
 app.add_middleware(
