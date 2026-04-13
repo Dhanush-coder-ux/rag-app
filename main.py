@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import init_db
 from app.routers import documents, rag
 from app.routers import chat_session
-
+import sys
 
 
 @asynccontextmanager
@@ -20,6 +20,13 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+if sys.platform !=  "win32" :
+    import uvloop
+    import asyncio
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+        
+
 
 app.add_middleware(
     CORSMiddleware,
