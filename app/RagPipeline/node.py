@@ -6,7 +6,7 @@ import re
 from typing import List
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from app.llms.llm_routers import LLMRouter
 from app.web_search_tool.web_search_tool import WebSearchTool
 from app.core.config import settings
 from app.rag_services.document_service import DocumentService
@@ -70,12 +70,12 @@ def _steps_for_mode(mode: RagMode) -> dict[str, str]:
 class RagNodes:
     def __init__(self, db: AsyncSession):
         self._db = db
-
-
+       
     async def query_rewrite(self, state: AgentState) -> dict:
         original     = state["question"].strip()
         history      = state.get("history", [])
         history_block = _build_history_block(history, max_messages=6)
+        selected_model = state.get("model", "auto")
 
         prompt = (
             "You are a query-optimisation assistant for a RAG search engine.\n"
@@ -97,7 +97,7 @@ class RagNodes:
         )
 
         try:
-            raw       = await generate_answer(prompt, [])
+            raw       = await LLMRouter.generate_text(prompt,model=selected_model)
             rewritten = raw.strip().strip('"').strip("'")
         except Exception as exc:
             logger.error("query_rewrite LLM error: %s", exc)
@@ -119,6 +119,7 @@ class RagNodes:
         q             = state.get("rewritten_question") or state["question"]
         history       = state.get("history", [])
         history_block = _build_history_block(history, max_messages=4)
+        selected_model = state.get("model", "auto")
 
         prompt = (
             "You are a routing classifier. Output EXACTLY one token from this list:\n"
@@ -140,7 +141,7 @@ class RagNodes:
         tool: ToolName = "retrieve_node"
         for attempt in range(3):
             try:
-                raw       = await generate_answer(prompt, [])
+                raw       = await LLMRouter.select_route(prompt, model=selected_model)
                 candidate = _helper._extract_first_word(raw)
                 if candidate in VALID_TOOLS:
                     tool = candidate
@@ -307,6 +308,7 @@ class RagNodes:
         question = state.get("rewritten_question") or state["question"]
         history  = state.get("history", [])
         mode     = state.get("mode", "hybrid")
+        selected_model = state.get("model", "auto")
         label    = _steps_for_mode(mode).get("generate", "🧠 Generating answer...")
 
         if not context and history:
@@ -348,7 +350,7 @@ class RagNodes:
         )
 
         try:
-            answer = (await generate_answer(prompt, [])).strip()
+            answer = (await LLMRouter.generate_text(prompt, model=selected_model)).strip()
         except Exception as exc:
             logger.error("generator_node LLM error: %s", exc)
             answer = "An error occurred while generating the answer. Please try again."
@@ -367,6 +369,7 @@ class RagNodes:
         question      = state.get("rewritten_question") or state["question"]
         context_block = "\n\n---\n\n".join(state.get("context", []))
         mode          = state.get("mode", "hybrid")
+        selected_model = state.get("model", "auto")
         label         = _steps_for_mode(mode).get("reflect", "✅ Reviewing answer...")
 
         if not answer:
@@ -388,7 +391,7 @@ class RagNodes:
         )
 
         try:
-            improved = (await generate_answer(prompt, [])).strip()
+            improved = (await LLMRouter.generate_text(prompt, model=selected_model)).strip()
             if not improved or _helper._is_bad_rewrite(answer, improved):
                 improved = answer
         except Exception as exc:

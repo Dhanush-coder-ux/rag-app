@@ -11,15 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.RagPipeline.graph import build_rag_graph
 from app.RagPipeline.state import AgentState, RagMode
-from app.rag_services.gemini import generate_answer_stream
+# ✅ Import your shiny new LLMRouter
+from app.llms.llm_routers import LLMRouter 
 from app.schemas.rag import SourceItem
 
 logger = logging.getLogger(__name__)
 
 
-
 def _enrich_sources(raw_sources: List[str], context: List[str]) -> List[SourceItem]:
-
     items: List[SourceItem] = []
 
     for url in raw_sources:
@@ -70,16 +69,18 @@ def _url_to_title(url: str) -> str:
         return url
 
 
-
-
 class LangGraphService:
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession) -> None:   
         self._db   = db
         self.graph = build_rag_graph(db)
-    def _make_initial_state(self, question: str, mode: RagMode = "hybrid") -> AgentState:
+        # ✅ Removed the direct Gemini/Llama model instantiations from here
+
+    # ✅ Added 'model' parameter to initial state
+    def _make_initial_state(self, question: str, mode: RagMode = "hybrid", model: str = "auto") -> AgentState:
         return {
             "question":   question,
             "mode":       mode,             
+            "model":      model, 
             "answer":     "",
             "steps":      [],
             "tool":       "none",
@@ -91,19 +92,20 @@ class LangGraphService:
         }
 
 
-
     async def run(
         self,
         question: str,
         history:  list[dict] | None = None,
         mode:     RagMode           = "hybrid",
+        model:    str               = "auto", # ✅ Added model parameter
     ) -> dict:
-        initial           = self._make_initial_state(question, mode=mode)
+        # ✅ Pass model to initial state
+        initial           = self._make_initial_state(question, mode=mode, model=model)
         initial["history"] = history or []
 
         logger.info(
-            "LangGraphService.run trace_id=%s mode=%s question=%r",
-            initial["trace_id"], mode, question,
+            "LangGraphService.run trace_id=%s mode=%s model=%s question=%r",
+            initial["trace_id"], mode, model, question,
         )
 
         result  = await self.graph.ainvoke(initial)
@@ -114,7 +116,6 @@ class LangGraphService:
             result.get("context", []),
         )
         result["tool_used"] = _resolve_tool_used(mode, result.get("tool_used"))
-
         result["history"] = list(initial["history"]) + [
             {"role": "user",      "content": question},
             {"role": "assistant", "content": result.get("answer", "")},
@@ -123,20 +124,21 @@ class LangGraphService:
         return result
 
 
-
     async def stream(
         self,
         question: str,
         history:  list[dict] | None = None,
         mode:     RagMode           = "hybrid",
+        model:    str               = "auto", # ✅ Added model parameter
     ) -> AsyncGenerator[str, None]:
 
-        initial            = self._make_initial_state(question, mode=mode)
+        # ✅ Pass model to initial state
+        initial            = self._make_initial_state(question, mode=mode, model=model)
         initial["history"] = history or []
 
         logger.info(
-            "LangGraphService.stream trace_id=%s mode=%s question=%r",
-            initial["trace_id"], mode, question,
+            "LangGraphService.stream trace_id=%s mode=%s model=%s question=%r",
+            initial["trace_id"], mode, model, question,
         )
 
         yield f"event: trace\ndata: {initial['trace_id']}\n\n"
@@ -187,7 +189,9 @@ class LangGraphService:
             yield f"event: step\ndata: {json.dumps(generate_label)}\n\n"
 
             query = final_state.get("rewritten_question", final_state["question"])
-            async for chunk in generate_answer_stream(query, context):
+            
+            # ✅ Use the LLMRouter for streaming! 
+            async for chunk in LLMRouter.generate_answer_stream(query, context, model=model):
                 if chunk:
                     yield f"data: {json.dumps(chunk)}\n\n"
 
@@ -196,7 +200,6 @@ class LangGraphService:
             yield f"data: {json.dumps(f'Error: {str(exc)}')}\n\n"
 
         yield "data: [DONE]\n\n"
-
 
 
 def _resolve_tool_used(

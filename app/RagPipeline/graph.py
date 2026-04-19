@@ -1,8 +1,6 @@
 from __future__ import annotations
-
 from langgraph.graph import StateGraph, END
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.RagPipeline.state import AgentState, RagMode
 from app.RagPipeline.node import RagNodes
 
@@ -17,16 +15,12 @@ _MODE_TO_NODE: dict[RagMode, str] = {
 
 
 def _route_after_rewrite(state: AgentState) -> str:
-    """
-    Skip the LLM router when the client supplies an explicit mode.
-    Fall back to the LLM router only for 'auto' / missing mode.
-    """
+
     mode: RagMode = state.get("mode", "hybrid")
     return _MODE_TO_NODE.get(mode, "router")  
 
 
 def _route_after_router(state: AgentState) -> str:
-    """Fallback: honour whatever the LLM router decided."""
     tool = state.get("tool", "none")
     return {
         "retrieve_node": "retriever",

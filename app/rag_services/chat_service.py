@@ -1,26 +1,23 @@
 from __future__ import annotations
 import logging
-from datetime import datetime
 from typing import Sequence
 from sqlalchemy import delete, select
 from sqlalchemy.orm import noload
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.chat_session import ChatMessage, ChatSession
-from app.rag_services.gemini import generate_chat_title
 from app.utils.chat_service import ChatServices as _ChatServices
 from app.core.config import settings
+from app.llms.llm_routers import LLMRouter  
 
 logger = logging.getLogger(__name__)
 
 _compress_helper = _ChatServices()
 
 
-class _Chat:
+class ChatServices:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
-
-
-class ChatServices(_Chat):
+        # Removed self.llm_router instantiation since we will use static methods!
 
     async def _session_exists(self, session_id: int) -> bool:
         result = await self.db.execute(
@@ -69,7 +66,6 @@ class ChatServices(_Chat):
                 role=role,
                 content=_compress_helper._compress(content),
                 token_count=_compress_helper._estimate_tokens(content),
-                
             )
             self.db.add(msg)
 
@@ -130,7 +126,8 @@ class ChatServices(_Chat):
 
     async def generate_title(self, message: str) -> str:
         try:
-            title = await generate_chat_title(message)
+            # FIX: Call the static method directly on LLMRouter!
+            title = await LLMRouter.generate_chat_title(message)
             return title.strip().replace("\n", "")[:60]
         except Exception:
             logger.warning("Title generation failed — using message prefix")
@@ -154,10 +151,17 @@ class ChatServices(_Chat):
 
     async def create_chat_session(self) -> ChatSession:
         try:
-            check = await self.db.execute(select(ChatSession).where(ChatSession.title == "New Chat"))
-            existing = check.scalar_one_or_none()
+            # FIX: Changed from scalar_one_or_none() to .first() to prevent crash 
+            # if multiple "New Chat" sessions exist. Also ordered by newest.
+            check = await self.db.execute(
+                select(ChatSession)
+                .where(ChatSession.title == "New Chat")
+                .order_by(ChatSession.updated_at.desc())
+            )
+            existing = check.scalars().first()
             if existing:
                 return existing
+            
             session = ChatSession(title="New Chat")
             self.db.add(session)
             await self.db.commit()
@@ -168,7 +172,6 @@ class ChatServices(_Chat):
             raise
 
     async def get_chat_sessions(self) -> list[ChatSession]:
- 
         try:
             result = await self.db.execute(
                 select(ChatSession)
@@ -181,7 +184,6 @@ class ChatServices(_Chat):
             raise
 
     async def get_chat_session(self, session_id: int) -> ChatSession | None:
-
         try:
             result = await self.db.execute(
                 select(ChatSession)

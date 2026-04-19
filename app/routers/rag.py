@@ -12,10 +12,9 @@ from app.rag_services.chat_service import ChatServices
 from app.RagPipeline.service import LangGraphService
 from app.schemas.rag import HistoryMessage, QuestionRequest, RagResponse
 
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/rag", tags=["rag"])
-
-
 
 @router.post("/ask", response_model=RagResponse)
 async def ask(
@@ -41,13 +40,15 @@ async def ask(
     await chat_service.save_user_message(session_id=session_id, content=body.question)
 
     history_dicts = [m.model_dump() for m in body.history]
+    
+    # 👈 Pass the model to svc.run
     state = await svc.run(
-        question=body.question, history=history_dicts, mode=body.mode
+        question=body.question, history=history_dicts, mode=body.mode, model=body.model
     )
 
     logger.info(
-        "/ask session_id=%s trace_id=%s mode=%s tool_used=%s",
-        session_id, state.get("trace_id"), body.mode, state.get("tool_used"),
+        "/ask session_id=%s trace_id=%s mode=%s model=%s tool_used=%s",
+        session_id, state.get("trace_id"), body.mode, body.model, state.get("tool_used"),
     )
 
     answer = state.get("answer", "")
@@ -91,8 +92,8 @@ async def ask_stream(
     history_dicts = [m.model_dump() for m in body.history]
 
     logger.info(
-        "/stream session_id=%s mode=%s question=%r",
-        body.session_id, body.mode, body.question,
+        "/stream session_id=%s mode=%s model=%s question=%r",
+        body.session_id, body.mode, body.model, body.question,
     )
 
     return StreamingResponse(
@@ -103,6 +104,7 @@ async def ask_stream(
             question=body.question,
             history=history_dicts,
             mode=body.mode,
+            model=body.model, # 👈 Pass the model to the generator
         ),
         media_type="text/event-stream",
         headers={
@@ -121,15 +123,18 @@ async def _stream_and_store(
     question: str,
     history: list[dict],
     mode: str,
+    model: str, # 👈 Accept the model here
 ):
 
     accumulated: list[str] = []
 
     try:
+        # 👈 Pass the model into svc.stream
         async for chunk in svc.stream(
             question=question,
             history=history,
             mode=mode,
+            model=model, 
         ):
             yield chunk
             text = _extract_chunk_text(chunk)
@@ -158,7 +163,6 @@ def _extract_chunk_text(chunk: str | bytes) -> str:
     if not chunk or "data:" not in chunk:
         return ""
 
-    # 🚨 ignore ALL non-answer events
     if chunk.startswith("event: step") \
         or chunk.startswith("event: trace") \
         or chunk.startswith("event: mode") \
@@ -174,7 +178,6 @@ def _extract_chunk_text(chunk: str | bytes) -> str:
     try:
         parsed = json.loads(payload)
 
-        # ✅ only extract actual answer text
         if isinstance(parsed, dict):
             return parsed.get("answer", "") or parsed.get("content", "") or ""
         
@@ -182,7 +185,6 @@ def _extract_chunk_text(chunk: str | bytes) -> str:
             return parsed
 
     except json.JSONDecodeError:
-        # ❌ DO NOT return raw payload anymore
         return ""
 
     return ""

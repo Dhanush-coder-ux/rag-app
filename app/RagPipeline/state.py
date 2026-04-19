@@ -5,6 +5,8 @@ from typing import List, Literal, Optional, TypedDict
 ToolName = Literal["retrieve_node", "web_search", "both", "none"]
 RagMode  = Literal["documents", "web", "hybrid"]
 
+LLMModel = Literal["auto", "gemini", "llama3"]
+
 
 class HistoryMessage(TypedDict):
     role: Literal["user", "assistant"]
@@ -12,23 +14,24 @@ class HistoryMessage(TypedDict):
 
 
 class AgentState(TypedDict, total=False):
-    # ── Input ──────────────────────────────────────────────────────────────
-    question:           str
+
+    question: str
     rewritten_question: str
-    mode:               RagMode          # NEW — injected at graph entry
+    mode: RagMode
 
-    # ── Pipeline internals ─────────────────────────────────────────────────
-    context:            List[str]
-    answer:             str
-    steps:              List[str]
-    tool:               ToolName
-    sources:            List[str]        # raw URL strings; enriched in service layer
+  
+    model: LLMModel       
+    used_model: str          
+ 
+    context: List[str]
+    answer: str
+    steps: List[str]
+    tool: ToolName
+    sources: List[str]
 
-    # ── Conversation ───────────────────────────────────────────────────────
-    history:            List[HistoryMessage]
+    history: List[HistoryMessage]
 
-    # ── Meta ───────────────────────────────────────────────────────────────
-    error:              Optional[str]
-    trace_id:           str
-    created_at:         str
-    confidence:         Optional[float]  # NEW — optional quality signal
+    error: Optional[str]
+    trace_id: str
+    created_at: str
+    confidence: Optional[float]

@@ -1,20 +1,26 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.document import Document, Chunk
-from app.rag_services.gemini import get_embedding, get_query_embedding
+from app.llms.llama3.embeddings import Llama3Embeddings
+from app.llms.gemini.embeddings import GeminiEmbeddings
 from app.rag_services.chunker import chunk_text, extract_text_from_pdf
 from app.core.config import settings
-
 
 class __DocumentIngestion:
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Renamed slightly for cleaner code below
+        self.llama_embeds = Llama3Embeddings()
+        self.gemini_embeds = GeminiEmbeddings()
+
 class DocumentService(__DocumentIngestion):
+    
     async def ingest_document(
-            self,
+        self,
         filename: str,
         file_bytes: bytes,
         content_type: str,
+        model: str = "gemini", # 👈 Added model selection parameter
     ) -> Document:
     
         doc = Document(filename=filename, status="processing")
@@ -30,7 +36,13 @@ class DocumentService(__DocumentIngestion):
             chunks_text = chunk_text(raw_text)
 
             for idx, chunk_content in enumerate(chunks_text):
-                embedding = await get_embedding(chunk_content)
+                
+                # 👈 Route the embedding based on the selected model
+                if model == "llama3":
+                    embedding = await self.llama_embeds.get_embedding(chunk_content)
+                else:
+                    embedding = await self.gemini_embeds.get_embedding(chunk_content)
+                
                 chunk = Chunk(
                     document_id=doc.id,
                     content=chunk_content,
@@ -56,10 +68,16 @@ class DocumentService(__DocumentIngestion):
         self,
         question: str,
         top_k: int | None = None,
+        model: str = "gemini", # 👈 Ensure the search query uses the same model!
     ) -> list[Chunk]:
     
         top_k = top_k or settings.TOP_K_RESULTS
-        query_embedding = await get_query_embedding(question)
+        
+        # 👈 Route the query embedding
+        if model == "llama3":
+            query_embedding = await self.llama_embeds.get_query_embedding(question)
+        else:
+            query_embedding = await self.gemini_embeds.get_query_embedding(question)
         
         stmt = (
             select(Chunk)
