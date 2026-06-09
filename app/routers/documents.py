@@ -49,6 +49,12 @@ async def ingest_youtube_video(request: YouTubeIngestRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@router.get("/tasks/{task_id}", response_model=TaskResponse)
+async def get_task_status(task_id: str):
+    from celery.result import AsyncResult
+    task = AsyncResult(task_id)
+    return {"task_id": task_id, "status": task.status}
+
 
 @router.get("/", response_model=list[DocumentOut])
 async def get_documents(db: db):

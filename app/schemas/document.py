@@ -33,6 +33,7 @@ class QueryResponse(BaseModel):
     
 class TaskResponse(BaseModel):
     task_id: str
+    status: str | None = None
 
 
 class AskRequest(BaseModel):

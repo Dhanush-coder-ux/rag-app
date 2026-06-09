@@ -30,25 +30,28 @@ class LLMRouter:
                     yield chunk
             except Exception as e:
                 if "429" in str(e):
-                    # ✨ FIXED: Build prompt and use generate_text
+                    # ✨ FIXED: Build prompt and use generate_answer_stream
                     prompt = LLMRouter._build_rag_prompt(question, context_chunks)
-                    yield llama.generate_text(prompt)
+                    async for chunk in llama.generate_answer_stream(prompt):
+                        yield chunk
                 else:
                     raise e
 
         elif model == "llama3":
-            # ✨ FIXED: Build prompt and use generate_text
+            # ✨ FIXED: Build prompt and use generate_answer_stream
             prompt = LLMRouter._build_rag_prompt(question, context_chunks)
-            yield llama.generate_text(prompt)
+            async for chunk in llama.generate_answer_stream(prompt):
+                yield chunk
 
         else: # auto
             try:
                 async for chunk in gemini.generate_answer_stream(question, context_chunks):
                     yield chunk
             except Exception:
-                # ✨ FIXED: Build prompt and use generate_text
+                # ✨ FIXED: Build prompt and use generate_answer_stream
                 prompt = LLMRouter._build_rag_prompt(question, context_chunks)
-                yield llama.generate_text(prompt)
+                async for chunk in llama.generate_answer_stream(prompt):
+                    yield chunk
 
     @staticmethod
     async def rewrite_query(question: str, model: str = "auto") -> str:
@@ -57,17 +60,17 @@ class LLMRouter:
                 return await gemini.rewrite_query(question)
             except Exception as e:
                 if "429" in str(e):
-                    return llama.rewrite_query(question)
+                    return await llama.rewrite_query(question)
                 raise e
 
         elif model == "llama3":
-            return llama.rewrite_query(question)
+            return await llama.rewrite_query(question)
 
         else: # auto
             try:
                 return await gemini.rewrite_query(question)
             except Exception:
-                return llama.rewrite_query(question)
+                return await llama.rewrite_query(question)
 
     @staticmethod
     async def generate_chat_title(message: str, model: str = "auto") -> str:
@@ -76,17 +79,17 @@ class LLMRouter:
                 return await gemini.generate_chat_title(message)
             except Exception as e:
                 if "429" in str(e):
-                    return llama.generate_chat_title(message)
+                    return await llama.generate_chat_title(message)
                 raise e
 
         elif model == "llama3":
-            return llama.generate_chat_title(message)
+            return await llama.generate_chat_title(message)
 
         else: # auto
             try:
                 return await gemini.generate_chat_title(message)
             except Exception:
-                return llama.generate_chat_title(message)
+                return await llama.generate_chat_title(message)
             
     @staticmethod
     async def select_route(prompt: str, model: str = "auto") -> str:
@@ -95,17 +98,17 @@ class LLMRouter:
                 return await gemini.select_route(prompt)
             except Exception as e:
                 if "429" in str(e):
-                    return llama.select_route(prompt)
+                    return await llama.select_route(prompt)
                 raise e
 
         elif model == "llama3":
-            return llama.select_route(prompt)
+            return await llama.select_route(prompt)
 
         else: # auto
             try:
                 return await gemini.select_route(prompt)
             except Exception:
-                return llama.select_route(prompt)
+                return await llama.select_route(prompt)
             
     @staticmethod
     async def generate_text(prompt: str, model: str = "auto") -> str:
@@ -114,14 +117,14 @@ class LLMRouter:
                 return await gemini.generate_text(prompt)
             except Exception as e:
                 if "429" in str(e):
-                    return llama.generate_text(prompt)
+                    return await llama.generate_text(prompt)
                 raise e
 
         elif model == "llama3":
-            return llama.generate_text(prompt)
+            return await llama.generate_text(prompt)
 
         else: # auto
             try:
                 return await gemini.generate_text(prompt)
             except Exception:
-                return llama.generate_text(prompt)
+                return await llama.generate_text(prompt)
