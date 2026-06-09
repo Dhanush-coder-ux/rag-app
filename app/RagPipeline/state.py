@@ -22,6 +22,7 @@ class AgentState(TypedDict, total=False):
   
     model: LLMModel       
     used_model: str          
+    document_ids: Optional[List[int]]
  
     context: List[str]
     answer: str

@@ -1,27 +1,7 @@
-"""
-web_search_tool.py
-==================
-Production-grade web search + content extraction tool designed for use
-inside AI agents (LangGraph / FastAPI RAG backends).
-
-Capabilities
-------------
-- Web search via DuckDuckGo (ddgs)
-- Clean article extraction via trafilatura, with BeautifulSoup fallback
-- Meaningful image extraction from pages (filters out icons/ads/SVGs)
-- Query-based image search via DuckDuckGo images
-- Structured JSON output ready for LLM consumption
-- Rate limiting, deduplication, robust error handling, and timeouts
-
-Author : Senior AI Engineer
-Usage  : Instantiate WebSearchTool and call .(query)
-"""
-
 import logging
 import time
 from typing import Optional
 from urllib.parse import urljoin, urlparse
-
 import requests
 import trafilatura
 from bs4 import BeautifulSoup
@@ -49,28 +29,6 @@ _SKIP_IMAGE_PATTERNS: tuple[str, ...] = (
 
 
 class WebSearchTool:
-    """
-    Tavily-style web search tool for AI agents.
-
-    Parameters
-    ----------
-    max_results : int
-        Maximum number of search results (and page fetches) to return.
-    timeout : int
-        HTTP request timeout in seconds.
-    max_content_chars : int
-        Maximum characters of extracted article text to return per result.
-        Keeps LLM token usage predictablesearch.
-    max_images_per_page : int
-        Maximum content images to extract per page.
-    max_related_images : int
-        Maximum images returned by the image_search step.
-    request_delay : float
-        Seconds to sleep between consecutive page fetches (rate limiting).
-    user_agent : str
-        User-Agent header sent with every HTTP request.
-    """
-
     def __init__(
         self,
         max_results: int = DEFAULT_MAX_RESULTS,
@@ -96,35 +54,6 @@ class WebSearchTool:
 
 
     def search(self, query: str) -> dict:
-        """
-        Run a full web search pipeline for *query*.
-
-        Steps
-        -----
-        1. Fetch top-N search result metadata from DuckDuckGo.
-        2. For each unique URL: extract article text + page images.
-        3. Run a parallel DuckDuckGo image search for related visuals.
-
-        Returns
-        -------
-        dict
-            Structured payload ready for LLM context injection::
-
-                {
-                    "query": str,
-                    "results": [
-                        {
-                            "title": str,
-                            "url": str,
-                            "snippet": str,
-                            "content": str,   # clean article text
-                            "images": [str]   # absolute image URLs
-                        },
-                        ...
-                    ],
-                    "related_images": [str]   # query-level image search
-                }
-        """
         logger.info("Starting search for: %r", query)
 
         raw_results = self._ddg_text_search(query)
@@ -133,7 +62,7 @@ class WebSearchTool:
             return {"query": query, "results": [], "related_images": []}
 
         results: list[dict] = []
-        seen_urls: set[str] = set()   # deduplication guard
+        seen_urls: set[str] = set()   
 
         for item in raw_results:
             url: str = item.get("href", "").strip()
@@ -179,17 +108,7 @@ class WebSearchTool:
         }
 
     def extract_content(self, url: str) -> str:
-        """
-        Fetch *url* and return clean, readable article text.
 
-        Strategy
-        --------
-        1. Primary  — trafilatura (best-in-class article extractor).
-        2. Fallback — BeautifulSoup <p> tag concatenation.
-        3. Hard cap  — truncated to ``max_content_chars`` to limit tokens.
-
-        Returns an empty string on any failure so the pipeline continues.
-        """
         html = self._fetch_html(url)
         if not html:
             return ""
@@ -219,18 +138,6 @@ class WebSearchTool:
             return ""
 
     def extract_images(self, url: str) -> list[str]:
-        """
-        Extract meaningful content images from the page at *url*.
-
-        Filters out:
-        - Icons, logos, favicons, sprites, ad images, tracking pixels
-        - SVG files (usually decorative/icons)
-        - Images lacking a ``src`` or ``data-src`` attribute
-
-        All relative URLs are resolved to absolute using ``urljoin``.
-
-        Returns a list of absolute image URL strings (may be empty).
-        """
         html = self._fetch_html(url)
         if not html:
             return []
@@ -274,12 +181,7 @@ class WebSearchTool:
         return images
 
     def image_search(self, query: str) -> list[str]:
-        """
-        Perform a DuckDuckGo image search for *query*.
 
-        Returns a list of direct image URLs related to the query.
-        Returns an empty list on any failure.
-        """
         images: list[str] = []
         try:
             with DDGS() as ddgs:
@@ -300,12 +202,7 @@ class WebSearchTool:
 
 
     def _ddg_text_search(self, query: str) -> list[dict]:
-        """
-        Execute a DuckDuckGo text search and return raw result dicts.
 
-        Handles DDGSException and generic exceptions gracefully so the
-        caller always receives a list (possibly empty).
-        """
         try:
             with DDGS() as ddgs:
                 buffer = max(self.max_results * 2, self.max_results + 5)
@@ -319,12 +216,7 @@ class WebSearchTool:
         return []
 
     def _fetch_html(self, url: str) -> Optional[str]:
-        """
-        Fetch the HTML at *url* using the shared session.
 
-        Returns the response text on success, or ``None`` on any failure
-        (timeout, connection error, HTTP error, invalid URL, etc.).
-        """
         try:
             response = self._session.get(url, timeout=self.timeout)
             response.raise_for_status()
@@ -354,13 +246,6 @@ class WebSearchTool:
 
     @staticmethod
     def _clean_text(text: str) -> str:
-        """
-        Normalise whitespace in extracted text.
-
-        - Collapses runs of spaces/tabs into a single space.
-        - Collapses 3+ consecutive newlines into 2 (preserve paragraph breaks).
-        - Strips leading/trailing whitespace.
-        """
         import re
         text = re.sub(r"[ \t]+", " ", text)
         text = re.sub(r"\n{3,}", "\n\n", text)

@@ -31,14 +31,17 @@ def _enrich_sources(raw_sources: List[str], context: List[str]) -> List[SourceIt
         ))
 
     for chunk in context:
-        if chunk.startswith("[Source: YOUR-DOCUMENT]"):
-            text = chunk.replace("[Source: YOUR-DOCUMENT]", "").strip()
-            items.append(SourceItem(
-                url=None,
-                title="Your Document",
-                snippet=text[:200] + "..." if len(text) > 200 else text,
-                source_type="document",
-            ))
+        if chunk.startswith("[Source: DOC | "):
+            match = re.match(r"^\[Source: DOC \| (.*?)\]\n(.*)", chunk, re.DOTALL)
+            if match:
+                title = match.group(1).strip()
+                text = match.group(2).strip()
+                items.append(SourceItem(
+                    url=None,
+                    title=title,
+                    snippet=text[:200] + "..." if len(text) > 200 else text,
+                    source_type="document",
+                ))
 
     seen = set()
     unique = []
@@ -53,7 +56,7 @@ def _enrich_sources(raw_sources: List[str], context: List[str]) -> List[SourceIt
 def _find_snippet_for_url(url: str, context: List[str]) -> str | None:
     for chunk in context:
         if url in chunk:
-            text = re.sub(rf"\[Source: {re.escape(url)}\]\s*", "", chunk).strip()
+            text = re.sub(rf"^\[Source: WEB \| {re.escape(url)}\]\s*", "", chunk).strip()
             return text[:200] + "..." if len(text) > 200 else text
     return None
 
@@ -76,11 +79,12 @@ class LangGraphService:
         # ✅ Removed the direct Gemini/Llama model instantiations from here
 
     # ✅ Added 'model' parameter to initial state
-    def _make_initial_state(self, question: str, mode: RagMode = "hybrid", model: str = "auto") -> AgentState:
+    def _make_initial_state(self, question: str, mode: RagMode = "hybrid", model: str = "auto", document_ids: List[int] | None = None) -> AgentState:
         return {
             "question":   question,
             "mode":       mode,             
             "model":      model, 
+            "document_ids": document_ids,
             "answer":     "",
             "steps":      [],
             "tool":       "none",
@@ -97,10 +101,10 @@ class LangGraphService:
         question: str,
         history:  list[dict] | None = None,
         mode:     RagMode           = "hybrid",
-        model:    str               = "auto", # ✅ Added model parameter
+        model:    str               = "auto",
+        document_ids: list[int] | None = None,
     ) -> dict:
-        # ✅ Pass model to initial state
-        initial           = self._make_initial_state(question, mode=mode, model=model)
+        initial           = self._make_initial_state(question, mode=mode, model=model, document_ids=document_ids)
         initial["history"] = history or []
 
         logger.info(
@@ -129,11 +133,11 @@ class LangGraphService:
         question: str,
         history:  list[dict] | None = None,
         mode:     RagMode           = "hybrid",
-        model:    str               = "auto", # ✅ Added model parameter
+        model:    str               = "auto",
+        document_ids: list[int] | None = None,
     ) -> AsyncGenerator[str, None]:
 
-        # ✅ Pass model to initial state
-        initial            = self._make_initial_state(question, mode=mode, model=model)
+        initial            = self._make_initial_state(question, mode=mode, model=model, document_ids=document_ids)
         initial["history"] = history or []
 
         logger.info(

@@ -11,6 +11,8 @@ class Document(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="processing")
+    source_type: Mapped[str] = mapped_column(String(50), default="file")  # "file", "youtube", "web", etc.
+    source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)  # For YouTube/web URLs
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
  

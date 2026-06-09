@@ -1,10 +1,9 @@
 import subprocess
 import os
 
-# Use Render dynamic port
 PORT = os.environ.get("PORT", "10000")
 
-# Start FastAPI (Gunicorn + Uvicorn workers)
+
 gunicorn_cmd = [
     "gunicorn",
     "main:app",

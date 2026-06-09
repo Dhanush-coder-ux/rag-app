@@ -24,7 +24,7 @@ TOP_K_RERANK                = settings.RERANKER_TOP_K
 _web_search = WebSearchTool(max_results=5)
 _helper     = RagPipeLineHelper()
 
-INTERNAL_SOURCE_TAG = "[Source: YOUR-DOCUMENT]"
+INTERNAL_SOURCE_TAG_PREFIX = "[Source: DOC | "
 
 HYBRID_DOC_WEIGHT = 2   # internal doc chunks count twice in merged context
 
@@ -157,14 +157,15 @@ class RagNodes:
     async def retriever_node(self, state: AgentState) -> dict:
         query = state.get("rewritten_question") or state["question"]
         mode  = state.get("mode", "documents")
+        document_ids = state.get("document_ids")
         label = _steps_for_mode(mode).get("retrieve", "📄 Searching documents...")
 
         try:
             service = DocumentService(db=self._db)
-            chunks  = await service.similarity_search(query)
+            chunks  = await service.similarity_search(query, document_ids=document_ids)
 
             context = _helper._deduplicate([
-                f"{INTERNAL_SOURCE_TAG}\n{c.content.strip()}"
+                f"[Source: DOC | {c.document.filename}]\n{c.content.strip()}"
                 for c in chunks
                 if c.content and len(c.content.strip()) >= MIN_CONTEXT_LENGTH
             ])
@@ -218,7 +219,7 @@ class RagNodes:
             if r.get("content") and len(r["content"].strip()) >= MIN_CONTEXT_LENGTH
         ]
         context = [
-            f"[Source: {r['url']}]\n{r['content'].strip()}"
+            f"[Source: WEB | {r['url']}]\n{r['content'].strip()}"
             for r in filtered if r.get("url")
         ]
         sources = [r["url"] for r in filtered if r.get("url")]
@@ -283,7 +284,7 @@ class RagNodes:
         label        = _steps_for_mode(mode).get("rerank", "🔍 Ranking results...")
 
         def _score(chunk: str) -> float:
-            is_internal    = chunk.startswith(INTERNAL_SOURCE_TAG)
+            is_internal    = chunk.startswith(INTERNAL_SOURCE_TAG_PREFIX)
             internal_boost = 0.15 if is_internal else 0.0
             chunk_tokens   = set(re.findall(r'\w+', chunk.lower()))
             if not query_tokens:
@@ -339,7 +340,7 @@ class RagNodes:
             "You are a precise question-answering assistant.\n\n"
             "RULES:\n"
             "1. Use BOTH retrieved CONTEXT and CONVERSATION HISTORY.\n"
-            "2. INTERNAL documents (tagged [Source: YOUR-DOCUMENT]) have highest priority.\n"
+            "2. INTERNAL documents (tagged [Source: DOC | <filename>]) have highest priority.\n"
             "3. If context is weak, fall back to conversation history.\n"
             "4. Keep answers concise and factual.\n"
             "5. Never fabricate information.\n\n"
@@ -420,10 +421,11 @@ class RagNodes:
     async def _retriever_raw(self, state: AgentState) -> dict:
         """Used by `both` node."""
         query   = state.get("rewritten_question") or state["question"]
+        document_ids = state.get("document_ids")
         service = DocumentService(db=self._db)
-        chunks  = await service.similarity_search(query)
+        chunks  = await service.similarity_search(query, document_ids=document_ids)
         context = _helper._deduplicate([
-            f"{INTERNAL_SOURCE_TAG}\n{c.content.strip()}"
+            f"[Source: DOC | {c.document.filename}]\n{c.content.strip()}"
             for c in chunks
             if c.content and len(c.content.strip()) >= MIN_CONTEXT_LENGTH
         ])
@@ -438,7 +440,7 @@ class RagNodes:
             if r.get("content") and len(r["content"].strip()) >= MIN_CONTEXT_LENGTH
         ]
         context  = [
-            f"[Source: {r['url']}]\n{r['content'].strip()}"
+            f"[Source: WEB | {r['url']}]\n{r['content'].strip()}"
             for r in filtered if r.get("url")
         ]
         sources  = [r["url"] for r in filtered if r.get("url")]

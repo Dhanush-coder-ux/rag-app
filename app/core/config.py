@@ -1,10 +1,9 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import RedisDsn
 
 class Settings(BaseSettings):
     DATABASE_URL: str
     GEMINI_API_KEY: str
-    REDIS_URL: RedisDsn 
+    REDIS_URL: str 
     APP_ENV: str = "development"
     CHUNK_SIZE: int = 1500
     CHUNK_OVERLAP: int = 150

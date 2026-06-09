@@ -43,7 +43,7 @@ async def ask(
     
     # 👈 Pass the model to svc.run
     state = await svc.run(
-        question=body.question, history=history_dicts, mode=body.mode, model=body.model
+        question=body.question, history=history_dicts, mode=body.mode, model=body.model, document_ids=body.document_ids
     )
 
     logger.info(
@@ -104,7 +104,8 @@ async def ask_stream(
             question=body.question,
             history=history_dicts,
             mode=body.mode,
-            model=body.model, # 👈 Pass the model to the generator
+            model=body.model,
+            document_ids=body.document_ids,
         ),
         media_type="text/event-stream",
         headers={
@@ -123,7 +124,8 @@ async def _stream_and_store(
     question: str,
     history: list[dict],
     mode: str,
-    model: str, # 👈 Accept the model here
+    model: str,
+    document_ids: list[int] | None = None,
 ):
 
     accumulated: list[str] = []
@@ -134,7 +136,8 @@ async def _stream_and_store(
             question=question,
             history=history,
             mode=mode,
-            model=model, 
+            model=model,
+            document_ids=document_ids,
         ):
             yield chunk
             text = _extract_chunk_text(chunk)

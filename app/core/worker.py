@@ -3,7 +3,10 @@ import asyncio
 from celery import Celery
 from app.core.database import AsyncSessionLocal
 from app.core.config import settings
+import logging
 from app.rag_services.document_service import DocumentService
+
+logger = logging.getLogger(__name__)
 
 
 celery_app = Celery(
@@ -18,11 +21,40 @@ celery_app = Celery(
 def ingest_document_task(filename: str, file_bytes: bytes, content_type: str):
     
     async def run():
-        async with AsyncSessionLocal() as db:
-            return await DocumentService(db).ingest_document(
-                filename=filename,
-                file_bytes=file_bytes,
-                content_type=content_type
-            )
+        try:
+            async with AsyncSessionLocal() as db:
+                doc = await DocumentService(db).ingest_document(
+                    filename=filename,
+                    file_bytes=file_bytes,
+                    content_type=content_type
+                )
+                return {"status": "success", "doc_id": doc.id}
+        except Exception as e:
+            logger.error(f"Failed to ingest document {filename}: {str(e)}")
+            return {"status": "failed", "error": str(e)}
+
+    return asyncio.run(run())
+
+
+@celery_app.task(name="ingest_youtube_task")
+def ingest_youtube_task(youtube_url: str, model: str = "gemini"):
+    """
+    Celery task to ingest YouTube video transcript asynchronously.
+    
+    Args:
+        youtube_url: URL of the YouTube video
+        model: Embedding model to use ("gemini" or "llama3")
+    """
+    async def run():
+        try:
+            async with AsyncSessionLocal() as db:
+                doc = await DocumentService(db).ingest_youtube(
+                    youtube_url=youtube_url,
+                    model=model
+                )
+                return {"status": "success", "doc_id": doc.id}
+        except Exception as e:
+            logger.error(f"Failed to ingest YouTube video {youtube_url}: {str(e)}")
+            return {"status": "failed", "error": str(e)}
 
     return asyncio.run(run())

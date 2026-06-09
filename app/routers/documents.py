@@ -2,6 +2,8 @@ from . import (
 db,TaskResponse,status,UploadFile,File,HTTPException,ingest_document_task,
 DocumentOut,Document,DocumentService,select,APIRouter
 )
+from app.schemas.document import YouTubeIngestRequest
+from app.core.worker import ingest_youtube_task
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 ALLOWED_TYPES = {"application/pdf", "text/plain"}
@@ -23,6 +25,29 @@ async def upload_document(
     )
 
     return {"task_id": task.id}
+
+
+@router.post("/youtube", response_model=TaskResponse, status_code=status.HTTP_202_ACCEPTED)
+async def ingest_youtube_video(request: YouTubeIngestRequest):
+    """
+    Ingest a YouTube video transcript for RAG.
+    
+    Accepts various YouTube URL formats:
+    - https://www.youtube.com/watch?v=VIDEO_ID
+    - https://youtu.be/VIDEO_ID
+    - https://www.youtube.com/embed/VIDEO_ID
+    - VIDEO_ID (raw 11-character ID)
+    
+    The transcript will be extracted, chunked, embedded, and stored in the vector database.
+    """
+    try:
+        task = ingest_youtube_task.delay(
+            youtube_url=request.url,
+            model=request.model
+        )
+        return {"task_id": task.id}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/", response_model=list[DocumentOut])
