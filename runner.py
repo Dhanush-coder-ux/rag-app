@@ -3,7 +3,6 @@ import os
 
 PORT = os.environ.get("PORT", "10000")
 
-
 gunicorn_cmd = [
     "gunicorn",
     "main:app",
