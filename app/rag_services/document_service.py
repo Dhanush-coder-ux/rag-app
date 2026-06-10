@@ -1,3 +1,4 @@
+import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
@@ -38,20 +39,26 @@ class DocumentService(__DocumentIngestion):
 
             chunks_text = chunk_text(raw_text)
 
-            for idx, chunk_content in enumerate(chunks_text):
-                
-                # 👈 Route the embedding based on the selected model
-                if model == "llama3":
-                    embedding = await self.llama_embeds.get_embedding(chunk_content)
-                else:
-                    embedding = await self.gemini_embeds.get_embedding(chunk_content)
-                
-                chunk = Chunk(
-                    document_id=doc.id,
-                    content=chunk_content,
-                    chunk_index=idx,
-                    embedding=embedding,
-                )
+            sem = asyncio.Semaphore(20) # Process 20 chunks concurrently
+
+            async def process_chunk(idx, chunk_content):
+                async with sem:
+                    if model == "llama3":
+                        embedding = await self.llama_embeds.get_embedding(chunk_content)
+                    else:
+                        embedding = await self.gemini_embeds.get_embedding(chunk_content)
+                    
+                    return Chunk(
+                        document_id=doc.id,
+                        content=chunk_content,
+                        chunk_index=idx,
+                        embedding=embedding,
+                    )
+
+            tasks = [process_chunk(idx, content) for idx, content in enumerate(chunks_text)]
+            chunks = await asyncio.gather(*tasks)
+            
+            for chunk in chunks:
                 self.db.add(chunk)
 
             doc.status = "ready"
@@ -108,19 +115,26 @@ class DocumentService(__DocumentIngestion):
             # Chunk and embed
             chunks_text = chunk_text(raw_text)
             
-            for idx, chunk_content in enumerate(chunks_text):
-                # Route embedding
-                if model == "llama3":
-                    embedding = await self.llama_embeds.get_embedding(chunk_content)
-                else:
-                    embedding = await self.gemini_embeds.get_embedding(chunk_content)
-                
-                chunk = Chunk(
-                    document_id=doc.id,
-                    content=chunk_content,
-                    chunk_index=idx,
-                    embedding=embedding,
-                )
+            sem = asyncio.Semaphore(20)
+
+            async def process_chunk(idx, chunk_content):
+                async with sem:
+                    if model == "llama3":
+                        embedding = await self.llama_embeds.get_embedding(chunk_content)
+                    else:
+                        embedding = await self.gemini_embeds.get_embedding(chunk_content)
+                    
+                    return Chunk(
+                        document_id=doc.id,
+                        content=chunk_content,
+                        chunk_index=idx,
+                        embedding=embedding,
+                    )
+
+            tasks = [process_chunk(idx, content) for idx, content in enumerate(chunks_text)]
+            chunks = await asyncio.gather(*tasks)
+            
+            for chunk in chunks:
                 self.db.add(chunk)
             
             doc.status = "ready"

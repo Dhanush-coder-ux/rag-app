@@ -1,9 +1,13 @@
+import os
+from pathlib import Path
+from fastapi.responses import FileResponse
 from . import (
 db,TaskResponse,status,UploadFile,File,HTTPException,ingest_document_task,
 DocumentOut,Document,DocumentService,select,APIRouter
 )
 from app.schemas.document import YouTubeIngestRequest
 from app.core.worker import ingest_youtube_task
+from app.core.config import settings
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 ALLOWED_TYPES = {"application/pdf", "text/plain"}
@@ -69,6 +73,22 @@ async def get_document(document_id: int, db:db):
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found.")
     return doc
+
+@router.get("/{document_id}/file")
+async def get_document_file(document_id: int, db: db):
+    """Serve the raw uploaded file for PDF preview."""
+    uploads_dir = settings.UPLOADS_DIR
+    # Try PDF first, then TXT
+    for ext, media_type in [(".pdf", "application/pdf"), (".txt", "text/plain")]:
+        path = Path(uploads_dir) / f"{document_id}{ext}"
+        if path.exists():
+            return FileResponse(
+                path=str(path),
+                media_type=media_type,
+                filename=path.name,
+                headers={"Access-Control-Allow-Origin": "*"},
+            )
+    raise HTTPException(status_code=404, detail="File not found on disk. It may have been uploaded before file storage was enabled.")
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_document(document_id: int, db: db):

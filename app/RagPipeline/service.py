@@ -193,15 +193,24 @@ class LangGraphService:
             yield f"event: step\ndata: {json.dumps(generate_label)}\n\n"
 
             query = final_state.get("rewritten_question", final_state["question"])
-            
-            # ✅ Use the LLMRouter for streaming! 
-            async for chunk in LLMRouter.generate_answer_stream(query, context, model=model):
+
+            # ✅ Use the LLMRouter for streaming — yields (model_name, chunk) tuples
+            model_used_emitted = False
+            async for model_name, chunk in LLMRouter.generate_answer_stream(query, context, model=model):
+                if model_name == "error":
+                    # Both models failed — emit as a readable error chunk
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+                if not model_used_emitted:
+                    yield f"event: model_used\ndata: {model_name}\n\n"
+                    model_used_emitted = True
                 if chunk:
                     yield f"data: {json.dumps(chunk)}\n\n"
 
         except Exception as exc:
             logger.exception("stream error trace_id=%s: %s", initial["trace_id"], exc)
-            yield f"data: {json.dumps(f'Error: {str(exc)}')}\n\n"
+            yield f"data: {json.dumps(f'⚠️ Stream error: {str(exc)}')}\n\n"
 
         yield "data: [DONE]\n\n"
 

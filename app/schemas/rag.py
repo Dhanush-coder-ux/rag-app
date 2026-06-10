@@ -16,7 +16,7 @@ class QuestionRequest(BaseModel):
     question: str
     session_id: int | None = None 
     mode: Literal["documents", "web", "hybrid"] = "hybrid"
-    model: Literal["auto", "gemini", "llama3"] = "auto"
+    model: Literal["auto", "gemini", "groq", "llama3"] = "auto"
     document_ids: List[int] | None = None
     history: List[HistoryMessage] = []
 

@@ -78,12 +78,6 @@ async def ask_stream(
     svc          = LangGraphService(db=db)
     chat_service = ChatServices(db)
 
-    if body.session_id:
-        await chat_service.update_title_if_needed(
-            session_id=body.session_id,
-            message=body.question,
-        )
-
     await chat_service.save_user_message(
         session_id=body.session_id,
         content=body.question,
@@ -157,6 +151,12 @@ async def _stream_and_store(
                 session_id=session_id,
                 content=full_response,
             )
+            
+        if session_id:
+            await chat_service.update_title_if_needed(
+                session_id=session_id,
+                message=question,
+            )
 
 def _extract_chunk_text(chunk: str | bytes) -> str:
     if isinstance(chunk, bytes):
@@ -170,7 +170,8 @@ def _extract_chunk_text(chunk: str | bytes) -> str:
         or chunk.startswith("event: trace") \
         or chunk.startswith("event: mode") \
         or chunk.startswith("event: sources") \
-        or chunk.startswith("event: tool_used"):
+        or chunk.startswith("event: tool_used") \
+        or chunk.startswith("event: model_used"):
         return ""
 
     payload = chunk.split("data:", 1)[1].strip()

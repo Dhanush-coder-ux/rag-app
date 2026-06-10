@@ -13,7 +13,10 @@ class Settings(BaseSettings):
     RETRIEVER_TOP_K: int = 10
     MAX_MESSAGES_PER_SESSION:int = 15  
     GZIP_LEVEL :int= 6    
-    OLLAMA_URL: str = "http://localhost:11434"              
+    OLLAMA_URL: str = "http://localhost:11434"
+    UPLOADS_DIR: str = "uploads"              # folder to persist uploaded files
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"  # default Groq model
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
   
   
