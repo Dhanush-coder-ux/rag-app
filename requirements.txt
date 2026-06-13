@@ -25,3 +25,6 @@ gunicorn ; platform_system !="windows"
 pytesseract==0.3.10
 # uvloop==0.21.0; platform_system != "windows"
 youtube-transcript-api==1.2.4
+groq
+pytest
+pytest-asyncio

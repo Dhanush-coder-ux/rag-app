@@ -14,7 +14,7 @@ _MODE_TO_NODE: dict[RagMode, str] = {
 }
 
 
-def _route_after_rewrite(state: AgentState) -> str:
+def _route_entry(state: AgentState) -> str:
 
     mode: RagMode = state.get("mode", "hybrid")
     return _MODE_TO_NODE.get(mode, "router")  
@@ -35,7 +35,6 @@ def build_rag_graph(db: AsyncSession):
     nodes    = RagNodes(db=db)
     workflow = StateGraph(AgentState)
 
-    workflow.add_node("query_rewrite", nodes.query_rewrite)
     workflow.add_node("router",        nodes.router_node)     
     workflow.add_node("retriever",     nodes.retriever_node)
     workflow.add_node("web_search",    nodes.web_search)
@@ -45,11 +44,8 @@ def build_rag_graph(db: AsyncSession):
     workflow.add_node("reflection",    nodes.reflection)
     workflow.add_node("error",         nodes.error_node)
 
-    workflow.set_entry_point("query_rewrite")
-
-    workflow.add_conditional_edges(
-        "query_rewrite",
-        _route_after_rewrite,
+    workflow.set_conditional_entry_point(
+        _route_entry,
         {
             "retriever":  "retriever",
             "web_search": "web_search",

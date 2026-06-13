@@ -192,7 +192,7 @@ class LangGraphService:
             }.get(mode, "🧠 Generating answer...")
             yield f"event: step\ndata: {json.dumps(generate_label)}\n\n"
 
-            query = final_state.get("rewritten_question", final_state["question"])
+            query = final_state["question"]
 
             # ✅ Use the LLMRouter for streaming — yields (model_name, chunk) tuples
             model_used_emitted = False

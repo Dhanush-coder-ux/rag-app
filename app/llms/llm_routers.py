@@ -8,7 +8,7 @@ from app.llms.llama3.generation  import Llama3Generation
 logger = logging.getLogger(__name__)
 
 gemini = GeminiGeneration()
-groq_  = GroqGeneration()      # renamed to avoid shadowing the `groq` package
+groq_  = GroqGeneration()     
 llama  = Llama3Generation()
 
 
@@ -52,8 +52,8 @@ def _build_both_failed_msg(gemini_err: Exception, llama_err: Exception) -> str:
     else:
         return (
             f"⚠️ Both AI models failed.\n\n"
-            f"- Gemini: `{gemini_str[:120]}`\n"
-            f"- Llama 3: `{llama_str[:120]}`"
+            f"- Gemini: `{repr(gemini_err)[:120]}`\n"
+            f"- Llama 3: `{repr(llama_err)[:120]}`"
         )
 
 
@@ -80,7 +80,7 @@ class LLMRouter:
             try:
                 gen = gemini.generate_answer_stream(question, context_chunks)
                 try:
-                    first_chunk = await asyncio.wait_for(anext(gen), timeout=4.0)
+                    first_chunk = await asyncio.wait_for(anext(gen), timeout=15.0)
                 except StopAsyncIteration:
                     return
                 yield ("gemini-2.5-flash", first_chunk)
@@ -88,7 +88,8 @@ class LLMRouter:
                     yield ("gemini-2.5-flash", chunk)
             except Exception as e:
                 if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or isinstance(e, asyncio.TimeoutError):
-                    # Rate-limited → try Groq first, then Llama
+                    # Rate-limited or timed out → try Groq first, then Llama
+                    logger.warning("Gemini failed (%s: %s), falling back to Groq", type(e).__name__, str(e))
                     try:
                         async for chunk in groq_.generate_answer_stream(question, context_chunks):
                             yield ("groq", chunk)
@@ -109,8 +110,8 @@ class LLMRouter:
                 async for chunk in groq_.generate_answer_stream(question, context_chunks):
                     yield ("groq", chunk)
             except Exception as e:
-                logger.error("generate_answer_stream Groq failed: %s", e)
-                yield ("error", f"⚠️ Groq API error: {str(e)[:200]}")
+                logger.error("generate_answer_stream Groq failed: %r", e)
+                yield ("error", f"⚠️ Groq API error: {repr(e)[:200]}")
 
         # ── Explicit: Llama 3 (Ollama) ────────────────────────────────────────
         elif model == "llama3":
@@ -119,8 +120,8 @@ class LLMRouter:
                 async for chunk in llama.generate_answer_stream(prompt):
                     yield ("llama3", chunk)
             except Exception as e:
-                logger.error("generate_answer_stream Llama3 failed: %s", e)
-                yield ("error", f"⚠️ Llama 3 is not reachable: {str(e)[:200]}")
+                logger.error("generate_answer_stream Llama3 failed: %r", e)
+                yield ("error", f"⚠️ Llama 3 is not reachable: {repr(e)[:200]}")
 
         # ── Auto: Gemini → Groq → Llama ───────────────────────────────────────
         else:
@@ -129,7 +130,7 @@ class LLMRouter:
             try:
                 gen = gemini.generate_answer_stream(question, context_chunks)
                 try:
-                    first_chunk = await asyncio.wait_for(anext(gen), timeout=4.0)
+                    first_chunk = await asyncio.wait_for(anext(gen), timeout=15.0)
                 except StopAsyncIteration:
                     return
                 yield ("gemini-2.5-flash", first_chunk)
@@ -160,40 +161,7 @@ class LLMRouter:
                 )
                 yield ("error", _build_both_failed_msg(gemini_err, llama_err))
 
-    # ── Query rewrite ─────────────────────────────────────────────────────────
 
-    @staticmethod
-    async def rewrite_query(question: str, model: str = "auto") -> str:
-        if model == "gemini":
-            try:
-                return await asyncio.wait_for(gemini.rewrite_query(question), timeout=3.0)
-            except Exception as e:
-                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or isinstance(e, asyncio.TimeoutError):
-                    try: return await groq_.rewrite_query(question)
-                    except Exception:
-                        try: return await llama.rewrite_query(question)
-                        except Exception: return question
-                raise e
-
-        elif model == "groq":
-            try: return await groq_.rewrite_query(question)
-            except Exception: return question
-
-        elif model == "llama3":
-            try: return await llama.rewrite_query(question)
-            except Exception: return question
-
-        else:  # auto
-            try: return await asyncio.wait_for(gemini.rewrite_query(question), timeout=3.0)
-            except Exception: pass
-            
-            try: return await groq_.rewrite_query(question)
-            except Exception: pass
-            
-            try: return await llama.rewrite_query(question)
-            except Exception: pass
-            
-            return question
 
     # ── Chat title generation ─────────────────────────────────────────────────
 
@@ -201,7 +169,7 @@ class LLMRouter:
     async def generate_chat_title(message: str, model: str = "auto") -> str:
         if model == "gemini":
             try:
-                return await asyncio.wait_for(gemini.generate_chat_title(message), timeout=3.0)
+                return await asyncio.wait_for(gemini.generate_chat_title(message), timeout=15.0)
             except Exception as e:
                 if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or isinstance(e, asyncio.TimeoutError):
                     try: return await groq_.generate_chat_title(message)
@@ -219,7 +187,7 @@ class LLMRouter:
             except Exception: return message[:40]
 
         else:  # auto
-            try: return await asyncio.wait_for(gemini.generate_chat_title(message), timeout=3.0)
+            try: return await asyncio.wait_for(gemini.generate_chat_title(message), timeout=15.0)
             except Exception: pass
             
             try: return await groq_.generate_chat_title(message)
@@ -236,7 +204,7 @@ class LLMRouter:
     async def select_route(prompt: str, model: str = "auto") -> str:
         if model == "gemini":
             try:
-                return await asyncio.wait_for(gemini.select_route(prompt), timeout=3.0)
+                return await asyncio.wait_for(gemini.select_route(prompt), timeout=15.0)
             except Exception as e:
                 if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or isinstance(e, asyncio.TimeoutError):
                     try: return await groq_.select_route(prompt)
@@ -254,7 +222,7 @@ class LLMRouter:
             except Exception: return "document"
 
         else:  # auto
-            try: return await asyncio.wait_for(gemini.select_route(prompt), timeout=3.0)
+            try: return await asyncio.wait_for(gemini.select_route(prompt), timeout=15.0)
             except Exception: pass
             
             try: return await groq_.select_route(prompt)
@@ -271,7 +239,7 @@ class LLMRouter:
     async def generate_text(prompt: str, model: str = "auto") -> str:
         if model == "gemini":
             try:
-                return await asyncio.wait_for(gemini.generate_text(prompt), timeout=3.0)
+                return await asyncio.wait_for(gemini.generate_text(prompt), timeout=15.0)
             except Exception as e:
                 if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or isinstance(e, asyncio.TimeoutError):
                     try: return await groq_.generate_text(prompt)
@@ -289,7 +257,7 @@ class LLMRouter:
             except Exception: return ""
 
         else:  # auto
-            try: return await asyncio.wait_for(gemini.generate_text(prompt), timeout=3.0)
+            try: return await asyncio.wait_for(gemini.generate_text(prompt), timeout=15.0)
             except Exception: pass
             
             try: return await groq_.generate_text(prompt)

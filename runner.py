@@ -1,5 +1,7 @@
 import subprocess
 import os
+import asyncio
+from app.core.database import init_db
 
 PORT = os.environ.get("PORT", "10000")
 
@@ -11,6 +13,10 @@ gunicorn_cmd = [
     "--timeout", "90",
     "--workers", "2"
 ]
+
+# Run database initialization sequentially BEFORE starting workers
+# This prevents race conditions where multiple workers try to create tables simultaneously
+asyncio.run(init_db())
 
 gunicorn_proc = subprocess.Popen(gunicorn_cmd)
 

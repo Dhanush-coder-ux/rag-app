@@ -38,21 +38,6 @@ class GroqGeneration:
     def model(self) -> str:
         return settings.GROQ_MODEL
 
-    # ── Query rewriting ────────────────────────────────────────────────────────
-
-    async def rewrite_query(self, question: str) -> str:
-        prompt = (
-            "Rewrite the user query into a single clear question. "
-            "Return ONLY the rewritten question, nothing else.\n\n"
-            f"User query: {question}\n\nRewritten query:"
-        )
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=128,
-        )
-        return response.choices[0].message.content.strip()
 
     # ── Chat title ─────────────────────────────────────────────────────────────
 

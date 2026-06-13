@@ -16,7 +16,6 @@ class HistoryMessage(TypedDict):
 class AgentState(TypedDict, total=False):
 
     question: str
-    rewritten_question: str
     mode: RagMode
 
   

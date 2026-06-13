@@ -53,21 +53,7 @@ async def generate_answer(question: str, context_chunks: list[str]) -> str:
 
     return response.text
 
-async def rewrite_query(question: str):
-    prompt = f"""
-    Rewrite the user query into a clear question.
 
-    User query:
-    {question}
-
-    Rewritten query:
-    """
-    response = await client.aio.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-    )
-
-    return response.text.strip()
 
 async def generate_answer_stream(question: str, context_chunks: list[str]):
     context = "\n\n---\n\n".join(context_chunks)

@@ -16,7 +16,8 @@ from app.routers import chat_session
         
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
+    # Database initialization is now handled sequentially in runner.py
+    # to prevent race conditions across multiple gunicorn workers.
     yield
 
 

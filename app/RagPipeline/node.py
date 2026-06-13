@@ -70,53 +70,9 @@ def _steps_for_mode(mode: RagMode) -> dict[str, str]:
 class RagNodes:
     def __init__(self, db: AsyncSession):
         self._db = db
-       
-    async def query_rewrite(self, state: AgentState) -> dict:
-        original     = state["question"].strip()
-        history      = state.get("history", [])
-        history_block = _build_history_block(history, max_messages=6)
-        selected_model = state.get("model", "auto")
-
-        prompt = (
-            "You are a query-optimisation assistant for a RAG search engine.\n"
-            "Task: rewrite the user question into a concise, unambiguous search query "
-            "suitable for both vector similarity search and web search.\n\n"
-            f"{history_block}"
-            "Rules:\n"
-            "- If the question uses pronouns like 'it', 'that', 'they', resolve them "
-            "using the conversation history above.\n"
-            "- Remove filler words; make the query self-contained.\n"
-            "- IMPORTANT: If the question mentions 'my document', 'my profile', "
-            "'my resume', or 'my skills', keep that intent explicit.\n"
-            "- Do NOT answer the question.\n"
-            "- Do NOT add information that wasn't in the original or history.\n"
-            "- Output ONLY the rewritten query — no explanations.\n"
-            "- If the question is already clear and specific, return it unchanged.\n\n"
-            f"Original question: {original}\n"
-            "Rewritten query:"
-        )
-
-        try:
-            raw       = await LLMRouter.generate_text(prompt,model=selected_model)
-            rewritten = raw.strip().strip('"').strip("'")
-        except Exception as exc:
-            logger.error("query_rewrite LLM error: %s", exc)
-            rewritten = original
-
-        if _helper._is_bad_rewrite(original, rewritten):
-            logger.warning("query_rewrite rejected bad output. original=%r rewritten=%r",
-                           original, rewritten)
-            rewritten = original
-
-        logger.info("query_rewrite: %r → %r", original, rewritten)
-        return {
-            "rewritten_question": rewritten,
-            "steps": _helper._safe_steps(state, "query_rewrite"),
-        }
-
 
     async def router_node(self, state: AgentState) -> dict:
-        q             = state.get("rewritten_question") or state["question"]
+        q             = state["question"]
         history       = state.get("history", [])
         history_block = _build_history_block(history, max_messages=4)
         selected_model = state.get("model", "auto")
@@ -155,7 +111,7 @@ class RagNodes:
 
 
     async def retriever_node(self, state: AgentState) -> dict:
-        query = state.get("rewritten_question") or state["question"]
+        query = state["question"]
         mode  = state.get("mode", "documents")
         document_ids = state.get("document_ids")
         label = _steps_for_mode(mode).get("retrieve", "📄 Searching documents...")
@@ -197,7 +153,7 @@ class RagNodes:
 
 
     async def web_search(self, state: AgentState) -> dict:
-        query = state.get("rewritten_question") or state["question"]
+        query = state["question"]
         mode  = state.get("mode", "web")
         label = _steps_for_mode(mode).get("retrieve", "🌐 Searching web...")
 
@@ -278,7 +234,7 @@ class RagNodes:
 
 
     async def reranker_node(self, state: AgentState) -> dict:
-        query        = (state.get("rewritten_question") or state["question"]).lower()
+        query        = state["question"].lower()
         query_tokens = set(re.findall(r'\w+', query))
         mode         = state.get("mode", "hybrid")
         label        = _steps_for_mode(mode).get("rerank", "🔍 Ranking results...")
@@ -306,7 +262,7 @@ class RagNodes:
 
     async def generator_node(self, state: AgentState) -> dict:
         context  = state.get("context", [])
-        question = state.get("rewritten_question") or state["question"]
+        question = state["question"]
         history  = state.get("history", [])
         mode     = state.get("mode", "hybrid")
         selected_model = state.get("model", "auto")
@@ -367,7 +323,7 @@ class RagNodes:
 
     async def reflection(self, state: AgentState) -> dict:
         answer        = state.get("answer", "")
-        question      = state.get("rewritten_question") or state["question"]
+        question      = state["question"]
         context_block = "\n\n---\n\n".join(state.get("context", []))
         mode          = state.get("mode", "hybrid")
         selected_model = state.get("model", "auto")
@@ -420,7 +376,7 @@ class RagNodes:
 
     async def _retriever_raw(self, state: AgentState) -> dict:
         """Used by `both` node."""
-        query   = state.get("rewritten_question") or state["question"]
+        query   = state["question"]
         document_ids = state.get("document_ids")
         service = DocumentService(db=self._db)
         chunks  = await service.similarity_search(query, document_ids=document_ids)
@@ -433,7 +389,7 @@ class RagNodes:
 
     async def _web_search_raw(self, state: AgentState) -> dict:
         """Used by `both` node."""
-        query    = state.get("rewritten_question") or state["question"]
+        query    = state["question"]
         res      = await asyncio.to_thread(_web_search.search, query)
         filtered = [
             r for r in res.get("results", [])

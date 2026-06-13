@@ -9,30 +9,10 @@ class Llama3Generation:
     @property
     def client(self) -> httpx.AsyncClient:
         if self._client is None:
-            # Set a long timeout (60s) to prevent ReadTimeout for LLM generation
-            self._client = httpx.AsyncClient(timeout=httpx.Timeout(timeout=60.0))
+            # Set a longer timeout (300s / 5m) to prevent ReadTimeout for slow local LLM generation
+            self._client = httpx.AsyncClient(timeout=httpx.Timeout(timeout=300.0))
         return self._client
 
-    async def rewrite_query(self, question: str) -> str:
-        prompt = f"""
-    Rewrite the user query into a clear question.
-
-    User query:
-    {question}
-
-    Rewritten query:
-    """
-        response = await self.client.post(
-            f"{settings.OLLAMA_URL}/api/generate",
-            json={
-                "model": "llama3",
-                "prompt": prompt,
-                "stream": False
-            }
-        )
-        
-        response.raise_for_status()
-        return response.json()["response"].strip()
 
     async def generate_chat_title(self, message: str) -> str:
         prompt = f"""
