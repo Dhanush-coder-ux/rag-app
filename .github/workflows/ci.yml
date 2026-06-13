@@ -36,6 +36,9 @@ jobs:
       - name: Run Tests
         env:
           PYTHONPATH: .
+          DATABASE_URL: postgresql+asyncpg://dummy:dummy@localhost/db
+          GEMINI_API_KEY: dummy_api_key
+          REDIS_URL: redis://localhost:6379/0
         run: pytest
 
   publish:
