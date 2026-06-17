@@ -166,9 +166,14 @@ async def voice_websocket(websocket: WebSocket, db: AsyncSession = Depends(get_d
         # Notify frontend that all text and audio chunks have been sent
         await websocket.send_text(json.dumps({"type": "end_of_audio"}))
         
+    except WebSocketDisconnect:
+        logger.info("Client disconnected during RAG generation")
     except Exception as e:
         logger.error(f"Generation error: {e}")
-        await websocket.send_text(json.dumps({"type": "error", "message": f"Generation failed: {str(e)}"}))
+        try:
+            await websocket.send_text(json.dumps({"type": "error", "message": f"Generation failed: {str(e)}"}))
+        except:
+            pass
     
     finally:
         try:

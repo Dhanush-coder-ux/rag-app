@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import asyncio
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -138,6 +139,9 @@ async def _stream_and_store(
             if text:
                 accumulated.append(text)
 
+    except asyncio.CancelledError:
+        logger.info("/stream cancelled by client for session %s", session_id)
+        raise
     except Exception:
         logger.exception(
             "/stream generation error for session %s — partial response may be stored",

@@ -160,25 +160,68 @@ class DocumentService(__DocumentIngestion):
         document_ids: list[int] | None = None,
     ) -> list[Chunk]:
     
+        from sqlalchemy import func
         top_k = top_k or settings.TOP_K_RESULTS
         
-        # 👈 Route the query embedding
+        # 1. Vector Search Query
         if model == "llama3":
             query_embedding = await self.llama_embeds.get_query_embedding(question)
         else:
             query_embedding = await self.gemini_embeds.get_query_embedding(question)
         
-        stmt = select(Chunk).options(joinedload(Chunk.document))
-        
+        vec_stmt = select(Chunk).options(joinedload(Chunk.document))
         if document_ids:
-            stmt = stmt.where(Chunk.document_id.in_(document_ids))
+            vec_stmt = vec_stmt.where(Chunk.document_id.in_(document_ids))
             
-        stmt = (
-            stmt.order_by(Chunk.embedding.cosine_distance(query_embedding))
-            .limit(top_k)
+        vec_stmt = (
+            vec_stmt.order_by(Chunk.embedding.cosine_distance(query_embedding))
+            .limit(top_k * 2)
         )
-        result = await self.db.execute(stmt)
-        return list(result.scalars().all())
+        
+        # 2. Full-Text Search (FTS) Query
+        fts_stmt = select(Chunk).options(joinedload(Chunk.document))
+        if document_ids:
+            fts_stmt = fts_stmt.where(Chunk.document_id.in_(document_ids))
+            
+        ts_query = func.plainto_tsquery('english', question)
+        ts_vector = func.to_tsvector('english', Chunk.content)
+        
+        fts_stmt = fts_stmt.where(ts_vector.op('@@')(ts_query)).order_by(
+            func.ts_rank(ts_vector, ts_query).desc()
+        ).limit(top_k * 2)
+
+        # 3. Execute sequentially to avoid AsyncSession concurrent errors
+        vec_res = await self.db.execute(vec_stmt)
+        fts_res = await self.db.execute(fts_stmt)
+        
+        vec_chunks = list(vec_res.scalars().all())
+        fts_chunks = list(fts_res.scalars().all())
+
+        # 4. Reciprocal Rank Fusion (RRF)
+        k = 60
+        chunk_scores: dict[int, float] = {}
+        chunk_map: dict[int, Chunk] = {}
+
+        for rank, chunk in enumerate(vec_chunks):
+            if chunk.id not in chunk_scores:
+                chunk_scores[chunk.id] = 0.0
+                chunk_map[chunk.id] = chunk
+            chunk_scores[chunk.id] += 1.0 / (k + rank)
+
+        for rank, chunk in enumerate(fts_chunks):
+            if chunk.id not in chunk_scores:
+                chunk_scores[chunk.id] = 0.0
+                chunk_map[chunk.id] = chunk
+            chunk_scores[chunk.id] += 1.0 / (k + rank)
+
+        # 5. Sort by RRF score and return top_k
+        sorted_chunks = sorted(
+            chunk_map.values(),
+            key=lambda c: chunk_scores[c.id],
+            reverse=True
+        )
+        
+        return sorted_chunks[:top_k]
 
 
     async def list_documents(self) -> list[Document]:
