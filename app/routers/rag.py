@@ -151,16 +151,21 @@ async def _stream_and_store(
     finally:
         full_response = "".join(accumulated).strip()
         if full_response and session_id:
-            await chat_service.save_assistant_message(
-                session_id=session_id,
-                content=full_response,
-            )
-            
-        if session_id:
-            await chat_service.update_title_if_needed(
-                session_id=session_id,
-                message=question,
-            )
+            # Use a fresh DB session because the request-scoped dependency session 
+            # might already be closed by FastAPI when StreamingResponse finishes.
+            from app.core.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as db_session:
+                from app.rag_services.chat_service import ChatServices
+                fresh_chat_service = ChatServices(db_session)
+                
+                await fresh_chat_service.save_assistant_message(
+                    session_id=session_id,
+                    content=full_response,
+                )
+                await fresh_chat_service.update_title_if_needed(
+                    session_id=session_id,
+                    message=question,
+                )
 
 def _extract_chunk_text(chunk: str | bytes) -> str:
     if isinstance(chunk, bytes):

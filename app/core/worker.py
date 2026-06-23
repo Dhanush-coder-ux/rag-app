@@ -29,7 +29,8 @@ def ingest_document_task(filename: str, file_bytes: bytes, content_type: str):
                 doc = await DocumentService(db).ingest_document(
                     filename=filename,
                     file_bytes=file_bytes,
-                    content_type=content_type
+                    content_type=content_type,
+                    model="nvidia"
                 )
                 return {"status": "success", "doc_id": doc.id}
         except Exception as e:
@@ -40,7 +41,7 @@ def ingest_document_task(filename: str, file_bytes: bytes, content_type: str):
 
 
 @celery_app.task(name="ingest_youtube_task")
-def ingest_youtube_task(youtube_url: str, model: str = "gemini"):
+def ingest_youtube_task(youtube_url: str, model: str = "nvidia"):
     async def run():
         try:
             async with AsyncSessionLocal() as db:

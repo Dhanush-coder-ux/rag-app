@@ -1,17 +1,14 @@
 import json
 import logging
-import io
-import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from groq import AsyncGroq
 from sqlalchemy.ext.asyncio import AsyncSession
 import edge_tts
-
 from app.core.config import settings
 from app.core.database import get_db
 from app.RagPipeline.service import LangGraphService
 from app.rag_services.chat_service import ChatServices
-from app.schemas.rag import HistoryMessage
+
 
 logger = logging.getLogger(__name__)
 

@@ -75,7 +75,8 @@ class RagNodes:
         q             = state["question"]
         history       = state.get("history", [])
         history_block = _build_history_block(history, max_messages=4)
-        selected_model = state.get("model", "auto")
+        # Always use a fast model for routing — GLM-5.1 is too slow for a 1-word decision
+        routing_model = "groq"
 
         prompt = (
             "You are a routing classifier. Output EXACTLY one token from this list:\n"
@@ -97,7 +98,7 @@ class RagNodes:
         tool: ToolName = "retrieve_node"
         for attempt in range(3):
             try:
-                raw       = await LLMRouter.select_route(prompt, model=selected_model)
+                raw       = await LLMRouter.select_route(prompt, model=routing_model)
                 candidate = _helper._extract_first_word(raw)
                 if candidate in VALID_TOOLS:
                     tool = candidate
@@ -113,12 +114,13 @@ class RagNodes:
     async def retriever_node(self, state: AgentState) -> dict:
         query = state["question"]
         mode  = state.get("mode", "documents")
+        selected_model = state.get("model", "auto")
         document_ids = state.get("document_ids")
         label = _steps_for_mode(mode).get("retrieve", "📄 Searching documents...")
 
         try:
             service = DocumentService(db=self._db)
-            chunks  = await service.similarity_search(query, document_ids=document_ids)
+            chunks  = await service.similarity_search(query, model=selected_model, document_ids=document_ids)
 
             context = _helper._deduplicate([
                 f"[Source: DOC | {c.document.filename}]\n{c.content.strip()}"
@@ -326,7 +328,8 @@ class RagNodes:
         question      = state["question"]
         context_block = "\n\n---\n\n".join(state.get("context", []))
         mode          = state.get("mode", "hybrid")
-        selected_model = state.get("model", "auto")
+        # Always use a fast model for reflection — avoid doubling the slow NVIDIA call
+        reflect_model = "groq"
         label         = _steps_for_mode(mode).get("reflect", "✅ Reviewing answer...")
 
         if not answer:
@@ -348,7 +351,7 @@ class RagNodes:
         )
 
         try:
-            improved = (await LLMRouter.generate_text(prompt, model=selected_model)).strip()
+            improved = (await LLMRouter.generate_text(prompt, model=reflect_model)).strip()
             if not improved or _helper._is_bad_rewrite(answer, improved):
                 improved = answer
         except Exception as exc:
@@ -377,9 +380,10 @@ class RagNodes:
     async def _retriever_raw(self, state: AgentState) -> dict:
         """Used by `both` node."""
         query   = state["question"]
+        selected_model = state.get("model", "auto")
         document_ids = state.get("document_ids")
         service = DocumentService(db=self._db)
-        chunks  = await service.similarity_search(query, document_ids=document_ids)
+        chunks  = await service.similarity_search(query, model=selected_model, document_ids=document_ids)
         context = _helper._deduplicate([
             f"[Source: DOC | {c.document.filename}]\n{c.content.strip()}"
             for c in chunks

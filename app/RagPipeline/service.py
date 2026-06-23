@@ -162,7 +162,7 @@ class LangGraphService:
                     yield f"event: step\ndata: {json.dumps(step)}\n\n"
                     last_step = step
 
-                if "reranker" in (snapshot.get("steps") or []):
+                if "🔍 Ranking results..." in (snapshot.get("steps") or []):
                     break
 
             context = final_state.get("context", [])

@@ -10,7 +10,6 @@ from app.models import chat_session
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.database import init_db
 from app.routers import documents, rag
 from app.routers import chat_session
 from app.routers import voice_ws

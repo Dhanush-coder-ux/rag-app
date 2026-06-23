@@ -3,21 +3,21 @@ import logging
 import asyncio
 from app.llms.gemini.generation import GeminiGeneration
 from app.llms.groq.generation   import GroqGeneration
-from app.llms.llama3.generation  import Llama3Generation
+from app.llms.nvidia.generation  import NvidiaGeneration
 
 logger = logging.getLogger(__name__)
 
 gemini = GeminiGeneration()
-groq_  = GroqGeneration()     
-llama  = Llama3Generation()
+groq_  = GroqGeneration()
+nvidia = NvidiaGeneration()
 
 
 # ── Error message builder ─────────────────────────────────────────────────────
 
-def _build_both_failed_msg(gemini_err: Exception, llama_err: Exception) -> str:
+def _build_both_failed_msg(gemini_err: Exception, nvidia_err: Exception) -> str:
     """Build a specific, actionable error message based on what actually failed."""
     gemini_str = str(gemini_err)
-    llama_str  = str(llama_err)
+    nvidia_str  = str(nvidia_err)
 
     retry_seconds = None
     retry_match = re.search(r'retryDelay["\s:\']+(\d+)', gemini_str)
@@ -27,33 +27,32 @@ def _build_both_failed_msg(gemini_err: Exception, llama_err: Exception) -> str:
         retry_seconds = int(float(retry_match.group(1)))
 
     is_gemini_quota = "429" in gemini_str or "RESOURCE_EXHAUSTED" in gemini_str
-    is_ollama_down  = "connection" in llama_str.lower() or "connect" in llama_str.lower()
+    is_nvidia_error = "401" in nvidia_str or "403" in nvidia_str or "connection" in nvidia_str.lower()
 
-    if is_gemini_quota and is_ollama_down:
+    if is_gemini_quota and is_nvidia_error:
         retry_hint = f" (retry in ~{retry_seconds}s)" if retry_seconds else ""
         wait_line  = f"- Wait {retry_seconds}s and retry\n" if retry_seconds else ""
         return (
             f"⚠️ **Gemini quota exhausted{retry_hint}** — you've hit the free-tier daily limit "
-            f"(20 requests/day). Llama 3 fallback also failed because Ollama is not running at "
-            f"`localhost:11434`.\n\n"
+            f"(20 requests/day). NVIDIA NIM fallback also failed.\n\n"
             f"**Options:**\n"
             f"{wait_line}"
-            f"- Start Ollama (`ollama serve`) and run `ollama pull llama3`\n"
+            f"- Check your NVIDIA API key is valid\n"
             f"- Upgrade your Gemini API plan"
         )
     elif is_gemini_quota:
         retry_hint = f" Please retry in ~{retry_seconds}s." if retry_seconds else ""
         return f"⚠️ **Gemini quota exhausted** — you've hit the free-tier daily limit.{retry_hint}"
-    elif is_ollama_down:
+    elif is_nvidia_error:
         return (
-            "⚠️ **Ollama is not running.** Start it with `ollama serve` and make sure "
-            "`llama3` is pulled (`ollama pull llama3`)."
+            "⚠️ **NVIDIA NIM API error.** Check your `NVIDIA_API_KEY` in `.env` "
+            "and ensure the model `z-ai/glm-5.1` is accessible."
         )
     else:
         return (
             f"⚠️ Both AI models failed.\n\n"
             f"- Gemini: `{repr(gemini_err)[:120]}`\n"
-            f"- Llama 3: `{repr(llama_err)[:120]}`"
+            f"- NVIDIA: `{repr(nvidia_err)[:120]}`"
         )
 
 
@@ -88,19 +87,18 @@ class LLMRouter:
                     yield ("gemini-2.5-flash", chunk)
             except Exception as e:
                 if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or isinstance(e, asyncio.TimeoutError):
-                    # Rate-limited or timed out → try Groq first, then Llama
+                    # Rate-limited or timed out → try Groq first, then NVIDIA
                     logger.warning("Gemini failed (%s: %s), falling back to Groq", type(e).__name__, str(e))
                     try:
                         async for chunk in groq_.generate_answer_stream(question, context_chunks):
                             yield ("groq", chunk)
                     except Exception as groq_err:
-                        logger.warning("Gemini→Groq fallback failed (%s), trying Llama", groq_err)
+                        logger.warning("Gemini→Groq fallback failed (%s), trying NVIDIA", groq_err)
                         try:
-                            prompt = LLMRouter._build_rag_prompt(question, context_chunks)
-                            async for chunk in llama.generate_answer_stream(prompt):
-                                yield ("llama3", chunk)
-                        except Exception as llama_err:
-                            yield ("error", _build_both_failed_msg(e, llama_err))
+                            async for chunk in nvidia.generate_answer_stream(question, context_chunks):
+                                yield ("nvidia", chunk)
+                        except Exception as nvidia_err:
+                            yield ("error", _build_both_failed_msg(e, nvidia_err))
                 else:
                     raise e
 
@@ -113,17 +111,16 @@ class LLMRouter:
                 logger.error("generate_answer_stream Groq failed: %r", e)
                 yield ("error", f"⚠️ Groq API error: {repr(e)[:200]}")
 
-        # ── Explicit: Llama 3 (Ollama) ────────────────────────────────────────
-        elif model == "llama3":
+        # ── Explicit: NVIDIA ──────────────────────────────────────────────────
+        elif model == "nvidia":
             try:
-                prompt = LLMRouter._build_rag_prompt(question, context_chunks)
-                async for chunk in llama.generate_answer_stream(prompt):
-                    yield ("llama3", chunk)
+                async for chunk in nvidia.generate_answer_stream(question, context_chunks):
+                    yield ("nvidia", chunk)
             except Exception as e:
-                logger.error("generate_answer_stream Llama3 failed: %r", e)
-                yield ("error", f"⚠️ Llama 3 is not reachable: {repr(e)[:200]}")
+                logger.error("generate_answer_stream NVIDIA failed: %r", e)
+                yield ("error", f"⚠️ NVIDIA NIM error: {repr(e)[:200]}")
 
-        # ── Auto: Gemini → Groq → Llama ───────────────────────────────────────
+        # ── Auto: Gemini → Groq → NVIDIA ──────────────────────────────────────
         else:
             gemini_err = None
             # 1️⃣ Try Gemini
@@ -147,19 +144,18 @@ class LLMRouter:
                     yield ("groq", chunk)
                 return
             except Exception as groq_err:
-                logger.warning("auto: Groq failed (%s), trying Llama", groq_err)
+                logger.warning("auto: Groq failed (%s), trying NVIDIA", groq_err)
 
-            # 3️⃣ Try Llama
+            # 3️⃣ Try NVIDIA
             try:
-                prompt = LLMRouter._build_rag_prompt(question, context_chunks)
-                async for chunk in llama.generate_answer_stream(prompt):
-                    yield ("llama3", chunk)
-            except Exception as llama_err:
+                async for chunk in nvidia.generate_answer_stream(question, context_chunks):
+                    yield ("nvidia", chunk)
+            except Exception as nvidia_err:
                 logger.error(
-                    "auto: all models failed. Gemini=%s | Groq=%s | Llama=%s",
-                    gemini_err, groq_err, llama_err,
+                    "auto: all models failed. Gemini=%s | Groq=%s | NVIDIA=%s",
+                    gemini_err, groq_err, nvidia_err,
                 )
-                yield ("error", _build_both_failed_msg(gemini_err, llama_err))
+                yield ("error", _build_both_failed_msg(gemini_err, nvidia_err))
 
 
 
@@ -174,7 +170,7 @@ class LLMRouter:
                 if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or isinstance(e, asyncio.TimeoutError):
                     try: return await groq_.generate_chat_title(message)
                     except Exception:
-                        try: return await llama.generate_chat_title(message)
+                        try: return await nvidia.generate_chat_title(message)
                         except Exception: return message[:40]
                 raise e
 
@@ -182,8 +178,8 @@ class LLMRouter:
             try: return await groq_.generate_chat_title(message)
             except Exception: return message[:40]
 
-        elif model == "llama3":
-            try: return await llama.generate_chat_title(message)
+        elif model == "nvidia":
+            try: return await nvidia.generate_chat_title(message)
             except Exception: return message[:40]
 
         else:  # auto
@@ -193,7 +189,7 @@ class LLMRouter:
             try: return await groq_.generate_chat_title(message)
             except Exception: pass
             
-            try: return await llama.generate_chat_title(message)
+            try: return await nvidia.generate_chat_title(message)
             except Exception: pass
             
             return message[:40]
@@ -209,7 +205,7 @@ class LLMRouter:
                 if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or isinstance(e, asyncio.TimeoutError):
                     try: return await groq_.select_route(prompt)
                     except Exception:
-                        try: return await llama.select_route(prompt)
+                        try: return await nvidia.select_route(prompt)
                         except Exception: return "document"
                 raise e
 
@@ -217,8 +213,8 @@ class LLMRouter:
             try: return await groq_.select_route(prompt)
             except Exception: return "document"
 
-        elif model == "llama3":
-            try: return await llama.select_route(prompt)
+        elif model == "nvidia":
+            try: return await nvidia.select_route(prompt)
             except Exception: return "document"
 
         else:  # auto
@@ -228,7 +224,7 @@ class LLMRouter:
             try: return await groq_.select_route(prompt)
             except Exception: pass
             
-            try: return await llama.select_route(prompt)
+            try: return await nvidia.select_route(prompt)
             except Exception: pass
             
             return "document"
@@ -244,7 +240,7 @@ class LLMRouter:
                 if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or isinstance(e, asyncio.TimeoutError):
                     try: return await groq_.generate_text(prompt)
                     except Exception:
-                        try: return await llama.generate_text(prompt)
+                        try: return await nvidia.generate_text(prompt)
                         except Exception: return ""
                 raise e
 
@@ -252,8 +248,8 @@ class LLMRouter:
             try: return await groq_.generate_text(prompt)
             except Exception: return ""
 
-        elif model == "llama3":
-            try: return await llama.generate_text(prompt)
+        elif model == "nvidia":
+            try: return await nvidia.generate_text(prompt)
             except Exception: return ""
 
         else:  # auto
@@ -263,7 +259,7 @@ class LLMRouter:
             try: return await groq_.generate_text(prompt)
             except Exception: pass
             
-            try: return await llama.generate_text(prompt)
+            try: return await nvidia.generate_text(prompt)
             except Exception: pass
             
             return ""

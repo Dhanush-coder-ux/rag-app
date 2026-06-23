@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from app.models.document import Document, Chunk
-from app.llms.llama3.embeddings import Llama3Embeddings
+from app.llms.nvidia.embeddings import NvidiaEmbeddings
 from app.llms.gemini.embeddings import GeminiEmbeddings
 from app.rag_services.chunker import chunk_text, extract_text_from_pdf
 from app.utils.youtube_extractor import extract_transcript, format_transcript_for_ingestion
@@ -12,8 +12,7 @@ from app.core.config import settings
 class __DocumentIngestion:
     def __init__(self, db: AsyncSession):
         self.db = db
-        # Renamed slightly for cleaner code below
-        self.llama_embeds = Llama3Embeddings()
+        self.nvidia_embeds = NvidiaEmbeddings()
         self.gemini_embeds = GeminiEmbeddings()
 
 class DocumentService(__DocumentIngestion):
@@ -43,8 +42,8 @@ class DocumentService(__DocumentIngestion):
 
             async def process_chunk(idx, chunk_content):
                 async with sem:
-                    if model == "llama3":
-                        embedding = await self.llama_embeds.get_embedding(chunk_content)
+                    if model == "nvidia":
+                        embedding = await self.nvidia_embeds.get_embedding(chunk_content)
                     else:
                         embedding = await self.gemini_embeds.get_embedding(chunk_content)
                     
@@ -86,7 +85,7 @@ class DocumentService(__DocumentIngestion):
         
         Args:
             youtube_url: URL of the YouTube video
-            model: Embedding model to use ("gemini" or "llama3")
+            model: Embedding model to use ("gemini" or "nvidia")
         
         Returns:
             Document object with ingested transcript
@@ -119,8 +118,8 @@ class DocumentService(__DocumentIngestion):
 
             async def process_chunk(idx, chunk_content):
                 async with sem:
-                    if model == "llama3":
-                        embedding = await self.llama_embeds.get_embedding(chunk_content)
+                    if model == "nvidia":
+                        embedding = await self.nvidia_embeds.get_embedding(chunk_content)
                     else:
                         embedding = await self.gemini_embeds.get_embedding(chunk_content)
                     
@@ -156,18 +155,18 @@ class DocumentService(__DocumentIngestion):
         self,
         question: str,
         top_k: int | None = None,
-        model: str = "gemini", # 👈 Ensure the search query uses the same model!
+        model: str = "nvidia",  # must match EMBEDDING_PROVIDER
         document_ids: list[int] | None = None,
     ) -> list[Chunk]:
     
         from sqlalchemy import func
         top_k = top_k or settings.TOP_K_RESULTS
         
-        # 1. Vector Search Query
-        if model == "llama3":
-            query_embedding = await self.llama_embeds.get_query_embedding(question)
-        else:
+        # 1. Vector Search Query — use nvidia for any non-gemini model value
+        if model == "gemini":
             query_embedding = await self.gemini_embeds.get_query_embedding(question)
+        else:  # nvidia, auto, groq, etc. all use the configured NVIDIA embedding
+            query_embedding = await self.nvidia_embeds.get_query_embedding(question)
         
         vec_stmt = select(Chunk).options(joinedload(Chunk.document))
         if document_ids:

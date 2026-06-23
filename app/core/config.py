@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 1500
     CHUNK_OVERLAP: int = 150
     TOP_K_RESULTS: int = 5
-    EMBEDDING_DIM: int = 768 
+    EMBEDDING_DIM: int = 1024  # BAAI/bge-m3 output dimension
     RERANKER_TOP_K: int = 5
     RETRIEVER_TOP_K: int = 10
     MAX_MESSAGES_PER_SESSION:int = 15  
@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     UPLOADS_DIR: str = "uploads"              # folder to persist uploaded files
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "llama-3.3-70b-versatile"  # default Groq model
+    NVIDIA_API_KEY: str = ""
+    NVIDIA_MODEL: str = "z-ai/glm-5.1"            # NVIDIA NIM model
+    EMBEDDING_PROVIDER: str = "gemini"            # Options: gemini, ollama
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
   
   
