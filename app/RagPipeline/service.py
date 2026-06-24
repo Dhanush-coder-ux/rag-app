@@ -96,6 +96,35 @@ class LangGraphService:
         }
 
 
+    async def retrieve_context(
+        self,
+        question: str,
+        mode: RagMode = "hybrid",
+        document_ids: list[int] | None = None,
+    ) -> list[str]:
+        """
+        Run the RAG graph only through the retrieval/reranking stage and
+        return the raw context chunks.  Used by Nemotron VoiceChat so it
+        can apply its own LLM on top of the retrieved context.
+        """
+        initial = self._make_initial_state(
+            question, mode=mode, model="auto", document_ids=document_ids
+        )
+        initial["history"] = []
+
+        final_state = initial
+        try:
+            async for snapshot in self.graph.astream(initial, stream_mode="values"):
+                final_state = snapshot
+                steps = snapshot.get("steps") or []
+                # Stop after reranking is done — we don't need LLM generation
+                if any("Ranking" in (s or "") for s in steps):
+                    break
+        except Exception as exc:
+            logger.warning("retrieve_context partial failure: %s", exc)
+
+        return final_state.get("context") or []
+
     async def run(
         self,
         question: str,

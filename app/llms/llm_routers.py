@@ -112,12 +112,12 @@ class LLMRouter:
                 yield ("error", f"⚠️ Groq API error: {repr(e)[:200]}")
 
         # ── Explicit: NVIDIA ──────────────────────────────────────────────────
-        elif model == "nvidia":
+        elif model in ("nvidia", "nemotron"):
             try:
                 async for chunk in nvidia.generate_answer_stream(question, context_chunks):
-                    yield ("nvidia", chunk)
+                    yield ("nvidia" if model == "nvidia" else "nemotron", chunk)
             except Exception as e:
-                logger.error("generate_answer_stream NVIDIA failed: %r", e)
+                logger.error("generate_answer_stream NVIDIA/Nemotron failed: %r", e)
                 yield ("error", f"⚠️ NVIDIA NIM error: {repr(e)[:200]}")
 
         # ── Auto: Gemini → Groq → NVIDIA ──────────────────────────────────────

@@ -68,12 +68,13 @@ class ChatServices:
                 token_count=_compress_helper._estimate_tokens(content),
             )
             self.db.add(msg)
+            await self.db.commit()
+            await self.db.refresh(msg)
 
             if prune:
                 await self._prune_old_messages(session_id)
+                await self.db.commit()
 
-            await self.db.commit()
-            await self.db.refresh(msg)
             logger.debug("Saved %s message id=%s for session %s", role, msg.id, session_id)
             return msg
 

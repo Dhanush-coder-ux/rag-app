@@ -8,18 +8,19 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 1500
     CHUNK_OVERLAP: int = 150
     TOP_K_RESULTS: int = 5
-    EMBEDDING_DIM: int = 1024  # BAAI/bge-m3 output dimension
+    EMBEDDING_DIM: int = 1024 
     RERANKER_TOP_K: int = 5
     RETRIEVER_TOP_K: int = 10
     MAX_MESSAGES_PER_SESSION:int = 15  
     GZIP_LEVEL :int= 6    
     OLLAMA_URL: str = "http://localhost:11434"
-    UPLOADS_DIR: str = "uploads"              # folder to persist uploaded files
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"  # default Groq model
+    GROQ_MODEL: str = "llama-3.3-70b-versatile" 
     NVIDIA_API_KEY: str = ""
-    NVIDIA_MODEL: str = "z-ai/glm-5.1"            # NVIDIA NIM model
-    EMBEDDING_PROVIDER: str = "gemini"            # Options: gemini, ollama
+    NVIDIA_MODEL: str = "z-ai/glm-5.1"           
+    NEMOTRON_API_KEY: str = ""
+    NEMOTRON_VOICE_MODEL: str = "nvidia/nemotron-voicechat" 
+    EMBEDDING_PROVIDER: str = "gemini"            
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
   
   

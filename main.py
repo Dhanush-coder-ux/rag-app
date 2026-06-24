@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import documents, rag
 from app.routers import chat_session
-from app.routers import voice_ws
+from app.routers import voice_live_ws
         
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,7 +41,7 @@ app.add_middleware(
 app.include_router(documents.router)
 app.include_router(rag.router)
 app.include_router(chat_session.router)
-app.include_router(voice_ws.router)
+app.include_router(voice_live_ws.router)
 
 
 @app.get("/health", tags=["Health"])
