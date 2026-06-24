@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     RETRIEVER_TOP_K: int = 10
     MAX_MESSAGES_PER_SESSION:int = 15  
     GZIP_LEVEL :int= 6    
-    OLLAMA_URL: str = "http://localhost:11434"
+
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "llama-3.3-70b-versatile" 
     NVIDIA_API_KEY: str = ""

@@ -14,7 +14,10 @@ class GeminiEmbeddings:
         )
     )
 
-        return response.embeddings[0].values
+        vals = response.embeddings[0].values
+        if len(vals) < settings.EMBEDDING_DIM:
+            vals.extend([0.0] * (settings.EMBEDDING_DIM - len(vals)))
+        return vals
 
 
     async def get_query_embedding(self, text: str) -> list[float]:
@@ -27,4 +30,7 @@ class GeminiEmbeddings:
         )
     )
 
-        return response.embeddings[0].values
+        vals = response.embeddings[0].values
+        if len(vals) < settings.EMBEDDING_DIM:
+            vals.extend([0.0] * (settings.EMBEDDING_DIM - len(vals)))
+        return vals

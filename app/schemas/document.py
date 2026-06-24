@@ -44,7 +44,7 @@ class AskRequest(BaseModel):
 class YouTubeIngestRequest(BaseModel):
     """Request model for ingesting YouTube video transcripts"""
     url: str  # YouTube URL (flexible format)
-    model: str = "gemini"  # Embedding model ("gemini" or "llama3")
+    model: str = "gemini"  # Embedding model ("gemini" or "nvidia")
     
     class Config:
         json_schema_extra = {

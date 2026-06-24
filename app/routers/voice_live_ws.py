@@ -52,6 +52,7 @@ async def voice_llm_stream(question: str, context_chunks: list[str], model_pref:
         "Use the provided context to answer the user's question concisely. "
         "Respond in natural spoken language — no markdown, bullet points, or code. "
         "Keep your answer to 2-4 sentences unless more detail is truly needed. "
+        "IMPORTANT: You MUST respond strictly in English, regardless of what language the user speaks. "
         "If the answer is not in the context say: "
         "\"I don't have that information in the documents.\""
     )
@@ -65,8 +66,8 @@ async def voice_llm_stream(question: str, context_chunks: list[str], model_pref:
     elif model_pref == "gemini":
         models_to_try = ["gemini", "nemotron", "nvidia", "groq"]
     else:
-        # Auto: Prefer Nemotron (100k daily limits), then NVIDIA, then Groq, then Gemini
-        models_to_try = ["nemotron", "nvidia", "groq", "gemini"]
+        # Auto: Prefer Groq (fastest, no 404s), then Gemini, then Nemotron
+        models_to_try = ["groq", "gemini", "nemotron", "nvidia"]
 
     last_err = None
     for m in models_to_try:
@@ -175,6 +176,7 @@ async def transcribe_audio(audio_bytes: bytes) -> str:
         file=("utterance.webm", audio_bytes, "audio/webm"),
         model="whisper-large-v3",
         response_format="json",
+        language="en",
     )
     return (response.text or "").strip()
 
@@ -186,7 +188,7 @@ async def tts_sentence(text: str, websocket: WebSocket) -> None:
     text = text.strip()
     if not text:
         return
-    communicate = edge_tts.Communicate(text, "en-US-AriaNeural")
+    communicate = edge_tts.Communicate(text, "en-IN-NeerjaExpressiveNeural")
     try:
         audio_data = bytearray()
         async for chunk in communicate.stream():

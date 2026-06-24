@@ -5,7 +5,7 @@ from typing import List, Literal, Optional, TypedDict
 ToolName = Literal["retrieve_node", "web_search", "both", "none"]
 RagMode  = Literal["documents", "web", "hybrid"]
 
-LLMModel = Literal["auto", "gemini", "llama3"]
+LLMModel = Literal["auto", "gemini", "groq", "nvidia", "nemotron"]
 
 
 class HistoryMessage(TypedDict):

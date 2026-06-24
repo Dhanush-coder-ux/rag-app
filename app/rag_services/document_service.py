@@ -12,8 +12,8 @@ from app.core.config import settings
 class __DocumentIngestion:
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.nvidia_embeds = NvidiaEmbeddings()
-        self.gemini_embeds = GeminiEmbeddings()
+        from app.llms.embedding_router import EmbeddingRouter
+        self.embedding_router = EmbeddingRouter()
 
 class DocumentService(__DocumentIngestion):
     
@@ -42,10 +42,7 @@ class DocumentService(__DocumentIngestion):
 
             async def process_chunk(idx, chunk_content):
                 async with sem:
-                    if model == "nvidia":
-                        embedding = await self.nvidia_embeds.get_embedding(chunk_content)
-                    else:
-                        embedding = await self.gemini_embeds.get_embedding(chunk_content)
+                    embedding = await self.embedding_router.get_embedding(chunk_content)
                     
                     return Chunk(
                         document_id=doc.id,
@@ -118,10 +115,7 @@ class DocumentService(__DocumentIngestion):
 
             async def process_chunk(idx, chunk_content):
                 async with sem:
-                    if model == "nvidia":
-                        embedding = await self.nvidia_embeds.get_embedding(chunk_content)
-                    else:
-                        embedding = await self.gemini_embeds.get_embedding(chunk_content)
+                    embedding = await self.embedding_router.get_embedding(chunk_content)
                     
                     return Chunk(
                         document_id=doc.id,
@@ -162,11 +156,7 @@ class DocumentService(__DocumentIngestion):
         from sqlalchemy import func
         top_k = top_k or settings.TOP_K_RESULTS
         
-        # 1. Vector Search Query — use nvidia for any non-gemini model value
-        if model == "gemini":
-            query_embedding = await self.gemini_embeds.get_query_embedding(question)
-        else:  # nvidia, auto, groq, etc. all use the configured NVIDIA embedding
-            query_embedding = await self.nvidia_embeds.get_query_embedding(question)
+        query_embedding = await self.embedding_router.get_query_embedding(question)
         
         vec_stmt = select(Chunk).options(joinedload(Chunk.document))
         if document_ids:
