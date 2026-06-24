@@ -11,7 +11,7 @@ gunicorn_cmd = [
     "-k", "uvicorn.workers.UvicornWorker",
     "--bind", f"0.0.0.0:{PORT}",
     "--timeout", "90",
-    "--workers", "2"]
+    "--workers", "1"]
 
 # Run database initialization sequentially BEFORE starting workers
 # This prevents race conditions where multiple workers try to create tables simultaneously
